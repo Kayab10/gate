@@ -2,7 +2,7 @@
 
 A mistake tracker, spaced-review scheduler, test log and study planner. It is a **PWA** (installable on your phone) that runs on
 **Vercel** with data in **Supabase Postgres**, so your phone and laptop always show the same data.
-One password, entered once per device (stays signed in for a year). After login you choose **what you are studying** (a *stream*); each stream has its own syllabus, mistakes, tests and schedule. It ships with **Mechanical Engineering (ME)**, seeded from the GATE 2027 ME syllabus; more streams can be added from the chooser.
+**Accounts:** sign up with email + password and choose your branch (**DA** or **ME**); you stay signed in on that device for a year. Everyone's data — syllabus, mistakes, tests, schedule, settings, screenshots — is completely separate (each account gets its own copy of the syllabus for its branch, and every query is scoped to the signed-in user). You can add the other branch to your account later.
 
 - **Put it online and install it:** see [DEPLOY.md](DEPLOY.md).
 - **Try it locally first:** `node dev-server.js` → http://localhost:5050 (an in-process Postgres in `data/pglite`, no accounts needed). Node 22+.
@@ -41,7 +41,7 @@ Postgres (Supabase in production; PGlite locally and in tests, so the same SQL r
 
 ## Security
 
-The API requires a session cookie (HttpOnly, SameSite=Strict, signed, 1-year, renewed on use). Changing `APP_PASSWORD` signs out every device. Cross-site requests are refused. If `APP_PASSWORD` is unset on Vercel the API refuses to serve data.
+Passwords are hashed with scrypt (salted). The API requires a signed session cookie (HttpOnly, SameSite=Strict, 1 year, renewed on use). Every table has a `user_id`, every query filters on it, and every id from a request is looked up together with the user id, so another user's id behaves like a missing one — covered by an automated cross-user test. Cross-site requests are refused. Optional `INVITE_CODE` limits who can create accounts.
 
 ## Tests
 

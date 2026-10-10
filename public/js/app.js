@@ -43,6 +43,7 @@ function drawNav() {
   const dueN = D.live.filter((m) => m.status !== 'mastered' && m.next_review <= D.today).length;
   const cur = current()[0];
   $('#navList').innerHTML = ROUTES.map(([k, label]) => `<li><a class="nav" href="#/${k}"${k === cur ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg><span class="lbl">${label}</span>${k === 'review' && dueN ? `<span class="pill" aria-label="${dueN} due">${dueN}</span>` : ''}</a></li>`).join('');
+  $('#userLine').textContent = D.user?.name || D.user?.email || '';
   $('#streamBtn').innerHTML = `<span><b>${esc(D.stream.code)}</b> · ${esc(D.stream.name)}</span><span>⇄</span>`;
   const exam = D.settings.general.examDate;
   $('#examCount').textContent = exam ? `${Math.max(0, diffDays(exam, D.today))} days to exam` : '';
@@ -82,7 +83,8 @@ window.addEventListener('hashchange', () => {
 
 $('#streamBtn').addEventListener('click', async () => {
   try {
-    if (await pickStream(await api('GET', '/api/streams'), { dismissable: true })) {
+    const r = await api('GET', '/api/streams');
+    if (await pickStream(r.streams, r.available, { dismissable: true })) {
       location.hash = '#/dashboard';
       await refresh();
     }

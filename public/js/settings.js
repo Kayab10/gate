@@ -63,7 +63,7 @@ ${D.subjects.map((sub) => {
   }).join('')}
 <form id="addSubject" class="row" style="margin-top:10px"><input name="name" placeholder="New subject name" required><input name="section" placeholder="Section (optional)"><button class="btn">Add subject</button></form></section>
 
-<section class="card"><h2>Your data</h2><p>Everything — mistakes, reviews, tests, schedule, settings and screenshots — is stored in your Supabase Postgres database, so it is the same on your phone and laptop.</p><button class="btn" id="logout">Sign out of this device</button></section>`;
+<section class="card"><h2>Your data</h2><p>Everything you record — mistakes, reviews, tests, schedule, settings and screenshots — is stored in your account, so it is the same on your phone and laptop, and nobody else can see it.</p><button class="btn" id="logout">Sign out</button></section>`;
 
   root.addEventListener('toggle', (e) => {
     const d = e.target.closest?.('[data-subj]');
@@ -75,6 +75,7 @@ ${D.subjects.map((sub) => {
   };
   $('#logout', root)?.addEventListener('click', async () => {
     await api('POST', '/api/logout');
+    try { localStorage.removeItem('stream'); } catch { /* ignore */ }
     location.reload();
   });
   root.addEventListener('submit', async (e) => {

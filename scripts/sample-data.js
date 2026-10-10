@@ -4,9 +4,14 @@
 // Uses the running app's HTTP API. Set PORT if the app is not on 5050.
 const BASE = `http://localhost:${process.env.PORT || 5050}`;
 const TAG = 'sample';
+const EMAIL = process.env.GATE_EMAIL || 'demo@example.com';
+const PASSWORD = process.env.GATE_PASSWORD || 'demo-password-1';
 let stream = '';
+let cookie = '';
 const api = async (method, url, body) => {
-  const r = await fetch(BASE + url, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(stream ? { 'X-Stream': String(stream) } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(BASE + url, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(stream ? { 'X-Stream': String(stream) } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const sc = r.headers.get('set-cookie');
+  if (sc) cookie = sc.split(';')[0];
   const j = await r.json();
   if (!r.ok) throw new Error(`${method} ${url}: ${j.error}`);
   return j;
@@ -27,7 +32,14 @@ async function remove() {
 }
 
 async function main() {
-  const streams = await api('GET', '/api/streams');
+  // sign in as the demo account (created on first use; use GATE_EMAIL / GATE_PASSWORD for another one)
+  try {
+    await api('POST', '/api/login', { email: EMAIL, password: PASSWORD });
+  } catch {
+    await api('POST', '/api/signup', { email: EMAIL, password: PASSWORD, name: 'Demo', branch: 'ME' });
+    console.log(`Created demo account ${EMAIL} / ${PASSWORD}`);
+  }
+  const { streams } = await api('GET', '/api/streams');
   stream = (streams.find((s) => s.code === 'ME') || streams[0]).id;
   if (process.argv.includes('--remove')) return remove();
   const b = await api('GET', '/api/bootstrap');

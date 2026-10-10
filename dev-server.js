@@ -10,7 +10,7 @@ const dataDir = process.env.GATE_DATA_DIR || path.join(dir, 'data');
 const port = Number(process.env.PORT) || 5050;
 
 const db = process.env.DATABASE_URL ? await pgAdapter(process.env.DATABASE_URL) : await pgliteAdapter(path.join(dataDir, 'pglite'));
-const app = await createApp({ db, password: process.env.APP_PASSWORD || '' });
+const app = await createApp({ db, secret: process.env.SESSION_SECRET || process.env.DATABASE_URL || 'local-dev-only-secret', inviteCode: process.env.INVITE_CODE || '' });
 app.server.listen(port, '127.0.0.1', () => {
   console.log(`GATE Tracker running at http://localhost:${port}`);
   console.log(process.env.DATABASE_URL ? 'Database: DATABASE_URL (remote Postgres)' : `Database: local PGlite in ${path.join(dataDir, 'pglite')}`);

@@ -25,24 +25,46 @@ export async function api(method, url, body) {
 }
 
 let loginPromise = null;
+/** Sign in / create-account overlay. Resolves once signed in (the session cookie then lasts a year). */
 export function showLogin() {
   if (loginPromise) return loginPromise;
   loginPromise = new Promise((resolve) => {
     const o = document.createElement('div');
     o.className = 'login';
-    o.innerHTML = `<form class="login-card" autocomplete="on"><div class="logo" style="width:40px;height:40px;font-size:1.2rem;margin-bottom:12px">✓</div><h1>GATE Tracker</h1><p class="muted">Enter your password. You stay signed in on this device for a year.</p>
-      <input type="text" name="username" value="me" autocomplete="username" style="position:absolute;left:-9999px" tabindex="-1" aria-hidden="true">
-      <input type="password" name="password" autocomplete="current-password" placeholder="Password" required style="width:100%;margin:10px 0">
-      <p class="err" data-err></p><button class="btn primary wide">Sign in</button></form>`;
     document.body.append(o);
-    o.querySelector('input[type=password]').focus();
-    o.querySelector('form').addEventListener('submit', async (e) => {
+    let mode = 'in';
+    let info = { branches: [], inviteRequired: false };
+    const draw = () => {
+      const up = mode === 'up';
+      o.innerHTML = `<form class="login-card" autocomplete="on"><div class="logo" style="width:40px;height:40px;font-size:1.2rem;margin-bottom:12px">✓</div><h1>GATE Tracker</h1>
+        <p class="muted" style="margin-top:0">${up ? 'Create your account and choose your branch.' : 'Sign in. You stay signed in on this device for a year.'}</p>
+        <div class="tabs" role="tablist" style="margin-bottom:14px"><button type="button" role="tab" data-mode="in" aria-selected="${!up}">Sign in</button><button type="button" role="tab" data-mode="up" aria-selected="${up}">Create account</button></div>
+        <div class="stack">
+          ${up ? '<input name="name" placeholder="Your name (optional)" autocomplete="name" style="width:100%">' : ''}
+          <input name="email" type="email" placeholder="Email" autocomplete="username" required style="width:100%">
+          <input name="password" type="password" placeholder="${up ? 'Password (8+ characters)' : 'Password'}" autocomplete="${up ? 'new-password' : 'current-password'}" required minlength="${up ? 8 : 1}" style="width:100%">
+          ${up ? `<fieldset><legend>Which paper are you preparing for?</legend><div class="chips">${info.branches.map((b, i) => `<label class="chip"><input type="radio" name="branch" value="${esc(b.code)}"${i === 0 ? ' checked' : ''}><span>${esc(b.name)} (${esc(b.code)})</span></label>`).join('')}</div></fieldset>` : ''}
+          ${up && info.inviteRequired ? '<input name="invite" placeholder="Invite code" required style="width:100%">' : ''}
+        </div>
+        <p class="err" data-err></p><button class="btn primary wide">${up ? 'Create account' : 'Sign in'}</button></form>`;
+      o.querySelector('input[name=email]').focus();
+    };
+    o.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-mode]');
+      if (t && t.dataset.mode !== mode) ((mode = t.dataset.mode), draw());
+    });
+    o.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn = o.querySelector('button');
+      const f = e.target.elements;
+      const btn = o.querySelector('button.primary');
       btn.disabled = true;
       try {
-        const r = await request('POST', '/api/login', { password: e.target.password.value });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Sign-in failed');
+        const body = mode === 'up'
+          ? { name: f.name.value, email: f.email.value, password: f.password.value, branch: f.branch.value, invite: f.invite?.value }
+          : { email: f.email.value, password: f.password.value };
+        const r = await request('POST', mode === 'up' ? '/api/signup' : '/api/login', body);
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Something went wrong');
+        try { localStorage.removeItem('stream'); } catch { /* ignore */ }
         o.remove();
         loginPromise = null;
         resolve();
@@ -51,46 +73,47 @@ export function showLogin() {
         btn.disabled = false;
       }
     });
+    request('GET', '/api/session').then((r) => r.json()).then((s) => (info = s)).catch(() => {}).finally(draw);
   });
   return loginPromise;
 }
 
-
-/* ---------- stream (what you are studying) ---------- */
+/* ---------- branch (what you are studying) ---------- */
 export const getStream = () => {
   try { return localStorage.getItem('stream') || ''; } catch { return ''; }
 };
-const setStream = (id) => {
+export const setStream = (id) => {
   try { localStorage.setItem('stream', String(id)); } catch { /* private mode: picker will simply show again */ }
 };
 
-/** Full-screen "What are you studying?" chooser. Resolves true when a stream was chosen, false if dismissed. */
-export function pickStream(streams, { dismissable = false } = {}) {
+/** Full-screen "What are you studying?" chooser. Resolves true when a branch was chosen, false if dismissed. */
+export function pickStream(streams, available = [], { dismissable = false } = {}) {
   return new Promise((resolve) => {
     const o = document.createElement('div');
     o.className = 'login';
-    const draw = (list) => {
+    const draw = (list, avail) => {
       o.innerHTML = `<div class="login-card" style="width:min(460px,100%)"><div class="logo" style="width:40px;height:40px;font-size:1.2rem;margin-bottom:12px">✓</div>
-        <h1>What are you studying?</h1><p class="muted">Each one keeps its own syllabus, mistakes, tests and schedule.</p>
+        <h1>What are you studying?</h1><p class="muted">Each branch keeps its own syllabus, mistakes, tests and schedule.</p>
         <div class="stack" style="margin:14px 0">${list.map((s) => `<button class="streamcard" data-id="${s.id}"><b>${esc(s.name)}</b><span class="badge info">${esc(s.code)}</span><small class="muted">${s.subjects} subjects · ${s.mistakes} open mistake${s.mistakes === 1 ? '' : 's'}</small></button>`).join('')}</div>
-        <details class="more"><summary>Add another stream</summary><form id="newStream" class="stack" style="margin:10px 0"><input name="name" placeholder="Name, e.g. Data Science and AI" required style="width:100%"><input name="code" placeholder="Short code, e.g. DA" maxlength="12" required style="width:100%"><p class="err" data-err></p><button class="btn small">Create (you then build its syllabus in Settings)</button></form></details>
+        ${avail.length ? `<div class="stack">${avail.map((b) => `<button class="btn wide" data-add="${esc(b.code)}">＋ Also study ${esc(b.name)} (${esc(b.code)})</button>`).join('')}<p class="err" data-err></p></div>` : ''}
         ${dismissable ? '<p style="margin:12px 0 0"><button class="btn ghost small" data-cancel>Cancel</button></p>' : ''}</div>`;
     };
-    draw(streams);
+    draw(streams, available);
     document.body.append(o);
-    o.addEventListener('click', (e) => {
+    o.addEventListener('click', async (e) => {
       const c = e.target.closest('.streamcard');
-      if (c) (setStream(c.dataset.id), o.remove(), resolve(true));
-      if (e.target.closest('[data-cancel]')) (o.remove(), resolve(false));
-    });
-    o.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      try {
-        const f = e.target.elements;
-        await api('POST', '/api/streams', { name: f.name.value, code: f.code.value });
-        draw(await api('GET', '/api/streams'));
-      } catch (ex) {
-        o.querySelector('[data-err]').textContent = ex.message;
+      if (c) return (setStream(c.dataset.id), o.remove(), resolve(true));
+      if (e.target.closest('[data-cancel]')) return (o.remove(), resolve(false));
+      const add = e.target.closest('[data-add]');
+      if (add) {
+        try {
+          const s = await api('POST', '/api/streams', { code: add.dataset.add });
+          setStream(s.id);
+          o.remove();
+          resolve(true);
+        } catch (ex) {
+          o.querySelector('[data-err]').textContent = ex.message;
+        }
       }
     });
   });
@@ -101,7 +124,8 @@ export const D = { loaded: false };
 export async function load() {
   let d = await api('GET', '/api/bootstrap');
   if (d.needsStream) {
-    await pickStream(d.streams);
+    if (d.streams.length === 1) setStream(d.streams[0].id); // only one branch: no need to ask
+    else await pickStream(d.streams, d.available);
     d = await api('GET', '/api/bootstrap');
   }
   Object.assign(D, d, { loaded: true });
