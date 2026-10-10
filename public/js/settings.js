@@ -1,5 +1,6 @@
 import { mount, D, esc, $, $$, api, opts, toast, fail, confirmDialog, askText, subjectOpts } from './util.js';
 import { DEFAULT_SRS } from '/shared/srs.js';
+import { todayStr } from '/shared/dates.js';
 import { DEFAULT_PRIORITY } from '/shared/priority.js';
 import { DEFAULT_PLANNER } from '/shared/planner.js';
 
@@ -16,6 +17,8 @@ const PLANNER_FIELDS = [
   ['topicBlockMinutes', 'Weak-topic study block (min)'], ['maintenanceMax', 'Max maintenance items per day'], ['aheadDays', 'Pull high-impact items forward by up to (days)'],
 ];
 const openSubj = new Set();
+const openKeys = new Set(); // details sections the user has opened
+const isOpen = (k) => (openKeys.has(k) ? ' open' : '');
 
 export function renderSettings(host, refresh) {
   const root = mount(host);
@@ -39,14 +42,16 @@ export function renderSettings(host, refresh) {
 </div><div class="notice">Saving re-derives every mistake’s next review date from its review history using the new values. Manual next-review overrides are kept.</div>
 <div class="row"><button class="btn primary">Save & recalculate</button><button type="button" class="btn" data-reset="srs">Reset to defaults</button></div></form></section>
 
-<details class="more" style="margin-bottom:14px"><summary>Advanced: priority weights & plan time estimates</summary>
+<details class="more" data-key="advanced" style="margin-bottom:14px"${isOpen('advanced')}><summary>Advanced: priority weights & plan time estimates</summary>
 ${numForm('priority', 'Priority score weights', PRIORITY_FIELDS, DEFAULT_PRIORITY, '<p class="hint">The score is a plain sum of these components — every score shows its breakdown. No topic is assumed to be “high weightage” unless you raise its importance below.</p>')}
 ${numForm('planner', 'Daily plan time estimates', PLANNER_FIELDS, DEFAULT_PLANNER)}</details>
 
-<section class="card"><h2>Root-cause categories</h2><p class="hint">The guidance text appears in reviews and mistake details.</p>
-${D.causes.map((c) => `<div class="card flat" data-kind="cause" data-id="${c.id}"><div class="row"><input data-f="name" value="${esc(c.name)}" style="flex:1;min-width:200px" aria-label="Cause name"><button class="btn danger small" data-del-cause="${c.id}">Delete</button></div>
-  <input data-f="description" value="${esc(c.description || '')}" placeholder="Description" style="width:100%;margin-top:6px" aria-label="Description"><textarea data-f="guidance" rows="2" placeholder="Corrective guidance" style="margin-top:6px" aria-label="Guidance">${esc(c.guidance || '')}</textarea></div>`).join('')}
-<form id="addCause" class="row"><input name="name" placeholder="New cause name" required><button class="btn">Add cause</button></form></section>
+<details class="more" data-key="causes" style="margin-bottom:14px"${isOpen('causes')}><summary>Root-cause categories <span class="muted small">(${D.causes.length})</span></summary>
+<p class="hint">Why a question went wrong. The guidance text appears in reviews and mistake details. Open a category to edit it.</p>
+${D.causes.map((c) => `<details class="more" data-key="cause-${c.id}" data-kind="cause" data-id="${c.id}"${isOpen('cause-' + c.id)}><summary>${esc(c.name)}</summary>
+  <div class="stack" style="margin:8px 0 10px"><div class="row"><input data-f="name" value="${esc(c.name)}" style="flex:1;min-width:200px" aria-label="Cause name"><button class="btn danger small" data-del-cause="${c.id}">Delete</button></div>
+  <input data-f="description" value="${esc(c.description || '')}" placeholder="Description" style="width:100%" aria-label="Description"><textarea data-f="guidance" rows="3" placeholder="Corrective guidance" aria-label="Guidance">${esc(c.guidance || '')}</textarea></div></details>`).join('')}
+<form id="addCause" class="row" style="margin:12px 0 4px"><input name="name" placeholder="New cause name" required><button class="btn">Add cause</button></form></details>
 
 <section class="card"><h2>Syllabus: subjects, topics & subtopics</h2>
 <p class="hint">Importance (1–5) is <b>your</b> judgement and feeds the priority score; 3 is neutral. Deleting a topic keeps its mistakes (they just lose the topic).</p>
@@ -63,9 +68,15 @@ ${D.subjects.map((sub) => {
   }).join('')}
 <form id="addSubject" class="row" style="margin-top:10px"><input name="name" placeholder="New subject name" required><input name="section" placeholder="Section (optional)"><button class="btn">Add subject</button></form></section>
 
+<details class="more" data-key="demo" style="margin-bottom:14px"${isOpen('demo')}><summary>Demo data (to try the app out)</summary>
+<p class="hint">Fills the branch you are studying (<b>${esc(D.stream.code)}</b>) with ${D.stream.code === 'ME' || D.stream.code === 'DA' ? 'about 20 sample mistakes with review history, mock tests, planner tasks, study time and syllabus ticks' : 'sample data'} so you can see every screen. Everything it adds is labelled “[Sample]” or tagged <code>sample</code>; removing it deletes only that and keeps what you entered yourself.</p>
+<div class="row" style="margin-bottom:8px"><button class="btn primary" id="demoLoad">Load demo data</button><button class="btn danger" id="demoRemove">Remove demo data</button></div></details>
+
 <section class="card"><h2>Your data</h2><p>Everything you record — mistakes, reviews, tests, schedule, settings and screenshots — is stored in your account, so it is the same on your phone and laptop, and nobody else can see it.</p><button class="btn" id="logout">Sign out</button></section>`;
 
   root.addEventListener('toggle', (e) => {
+    const k = e.target.dataset?.key;
+    if (k) e.target.open ? openKeys.add(k) : openKeys.delete(k);
     const d = e.target.closest?.('[data-subj]');
     if (d) d.open ? openSubj.add(Number(d.dataset.subj)) : openSubj.delete(Number(d.dataset.subj));
   }, true);
@@ -73,6 +84,23 @@ ${D.subjects.map((sub) => {
   const put = async (key, value, msg = 'Saved') => {
     try { await api('PUT', `/api/settings/${key}`, { value }); toast(msg); await refresh(); } catch (e) { fail(e); }
   };
+  $('#demoLoad', root)?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = 'Loading…';
+    try {
+      const r = await api('POST', '/api/demo', { today: todayStr() });
+      toast(r.already ? 'Demo data is already loaded.' : `Loaded ${r.mistakes} sample mistakes, ${r.tests} tests, and a planner, study log and checklist.`);
+      await refresh();
+    } catch (ex) { fail(ex); await refresh(); }
+  });
+  $('#demoRemove', root)?.addEventListener('click', async () => {
+    if (!(await confirmDialog('Remove all demo data? This deletes only the sample mistakes (tag “sample”), “[Sample]” tests and tasks, sample study time and sample syllabus ticks. Anything you entered yourself is kept.', { okLabel: 'Remove demo data' }))) return;
+    try {
+      const r = await api('DELETE', '/api/demo');
+      toast(`Removed ${r.mistakes} sample mistakes, ${r.tests} tests, ${r.tasks} tasks, ${r.log} study-log entries.`);
+      await refresh();
+    } catch (ex) { fail(ex); }
+  });
   $('#logout', root)?.addEventListener('click', async () => {
     await api('POST', '/api/logout');
     try { localStorage.removeItem('stream'); } catch { /* ignore */ }

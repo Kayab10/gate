@@ -20,6 +20,15 @@ A mistake tracker, spaced-review scheduler, test log and study planner. It is a 
 | Subject analytics | Per-subject and root-cause analysis, weekly trends, error rate per attempted question |
 | Settings | Exam date, review intervals, priority weights, mastery thresholds, plan time estimates, syllabus and root-cause editors |
 
+## Demo data
+
+Settings → **Demo data** loads about 20 sample mistakes (with review history), mock tests, planner tasks, study time and syllabus ticks into the branch you are studying, so you can see every screen. **Remove demo data** deletes only those (they are tagged `sample` / titled “[Sample]”) and keeps what you entered. The same from a terminal:
+
+```bash
+GATE_URL=https://your-app.vercel.app GATE_EMAIL=you@example.com GATE_PASSWORD='your password' node scripts/demo-data.js add
+GATE_URL=https://your-app.vercel.app GATE_EMAIL=you@example.com GATE_PASSWORD='your password' node scripts/demo-data.js remove
+```
+
 ## How the algorithms work
 
 **Review scheduling** (`shared/srs.js`). Default intervals 1, 3, 7, 14, 30 days, each measured from the *actual date of the previous review* (so overdue reviews don't compress the spacing). A mistake's state is always **re-derived by replaying its review events**, which is why editing dates, undoing a review or changing intervals can never leave it inconsistent.
@@ -55,7 +64,7 @@ Covers scheduling, priority, planner, analytics, API validation, bulk operations
 ```
 api/[...path].js   Vercel serverless entry     src/       db (Postgres + migrations), store, validation, HTTP
 public/            the app (no build step)     public/shared/  pure logic used by browser + server
-test/              node:test suites            scripts/   icon generator, sample-data loader
+test/              node:test suites            scripts/   icons, demo-data, reset-password
 ```
 
 ## Known limitations

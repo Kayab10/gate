@@ -529,6 +529,8 @@ export function createStore(db) {
     /* ---------- everything the UI needs for the chosen branch ---------- */
     async function bootstrap(streamId) {
       const [user, settings, causes, streams, available] = await Promise.all([getUser(uid), getSettings(), q('SELECT * FROM causes WHERE user_id=? ORDER BY sort, id', uid), listStreams(), availableBranches()]);
+      // a valid cookie for an account that no longer exists (e.g. the database was recreated) counts as signed out
+      if (!user) throw Object.assign(new Error('login'), { status: 401 });
       const base = { today: todayStr(), user, streams, available, settings, causes: causes.map(strip) };
       const stream = streams.find((x) => x.id === Number(streamId));
       if (!stream) return { ...base, needsStream: true };
@@ -554,6 +556,7 @@ export function createStore(db) {
       saveTest, deleteTest, saveTask, deleteTask, addLog, deleteLog, putProgress,
       saveSubject, deleteSubject, saveTopic, deleteTopic, saveCause, deleteCause,
       saveAttachment, getAttachment,
+      inTransaction: tx, // lets src/demo.js load/remove demo data atomically
     };
   }
 

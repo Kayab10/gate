@@ -24,6 +24,11 @@ export function renderDashboard(host, refresh) {
   const tile = (v, l, cls = '', tip = '') => `<div class="tile ${cls}" title="${esc(tip)}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
   root.innerHTML = `
 <div class="page-head"><div><h1>Dashboard</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}${exam ? ` · ${diffDays(exam, D.today)} days to the exam` : ''}</p></div></div>
+  <section class="card" style="margin-bottom:20px"><div class="row between"><h2 style="margin:0">Today’s schedule</h2><a href="#/schedule" class="small">Open schedule ›</a></div>
+    ${todayTasks.length ? todayTasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)} ${t.minutes ? `<span class="muted small">${dur(t.minutes)}</span>` : ''}</span></div>`).join('') : '<p class="muted small" style="margin:8px 0 0">No tasks planned for today. Add some in the Schedule.</p>'}
+    <p class="small muted" style="margin:8px 0 0">Studied today: <b>${dur(loggedToday) || '0m'}</b>${target ? ` of ${dur(target)} target` : ''}</p>
+    ${target ? `<div class="prog" style="margin-top:4px"><div style="width:${Math.min(100, (loggedToday / target) * 100)}%"></div></div>` : ''}
+  </section>
 <div class="tiles">
   ${tile(s.total, 'Mistakes recorded')}
   ${tile(s.unresolved, 'Unresolved')}
@@ -37,16 +42,10 @@ export function renderDashboard(host, refresh) {
 
 <div class="grid g2">
 <section class="card" aria-labelledby="planH">
-  <div class="row between"><h2 id="planH" style="margin:0">What should I study today?</h2>
-    <label class="row gap-s"><span class="muted small">Time available</span><input type="number" id="budget" min="5" step="5" value="${esc(budget)}" style="width:80px"> <span class="muted small">min</span></label></div>
+  <h2 id="planH">What should I study today?</h2>
   <div id="plan"></div>
 </section>
 <div>
-  <section class="card"><div class="row between"><h2 style="margin:0">Today’s schedule</h2><a href="#/schedule" class="small">Open schedule ›</a></div>
-    ${todayTasks.length ? todayTasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)} ${t.minutes ? `<span class="muted small">${dur(t.minutes)}</span>` : ''}</span></div>`).join('') : '<p class="muted small" style="margin:8px 0 0">No tasks planned for today. Add some in the Schedule.</p>'}
-    <p class="small muted" style="margin:8px 0 0">Studied today: <b>${dur(loggedToday) || '0m'}</b>${target ? ` of ${dur(target)} target` : ''}</p>
-    ${target ? `<div class="prog" style="margin-top:4px"><div style="width:${Math.min(100, (loggedToday / target) * 100)}%"></div></div>` : ''}
-  </section>
   <section class="card"><h2>Mistakes per week</h2>
     ${wk.some((w) => w.mistakes) ? lineChart({ labels: wk.map((w) => w.week), series: [{ name: 'New mistakes', values: wk.map((w) => w.mistakes) }, { name: 'Recurrences', values: wk.map((w) => w.recurrences), color: 'var(--c2)' }], ariaLabel: 'Mistakes per week' }) : empty('Charts appear once you have logged mistakes.')}
     ${wk.some((w) => w.errorRate != null) ? '<p class="hint">Test error rates (per attempted question) are on the Analytics page.</p>' : ''}</section>
@@ -84,10 +83,6 @@ export function renderDashboard(host, refresh) {
   };
   drawPlan();
 
-  $('#budget', root).addEventListener('input', (e) => {
-    budget = Number(e.target.value) || null;
-    drawPlan();
-  });
   root.addEventListener('click', async (e) => {
     if (e.target.closest('#togglePlan')) return ((showAll = !showAll), drawPlan());
     const open = e.target.closest('[data-open]');
