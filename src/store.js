@@ -85,6 +85,19 @@ export function createStore(db) {
     }
   }
 
+  /** Multi-row INSERT in chunks (one round trip per chunk instead of one per row). Returns the new ids in order if asked. */
+  async function insertMany(table, cols, rows, { returning = false, suffix = '' } = {}) {
+    const ids = [];
+    const per = Math.max(1, Math.floor(30000 / cols.length));
+    for (let i = 0; i < rows.length; i += per) {
+      const chunk = rows.slice(i, i + per);
+      const sql = `INSERT INTO ${table} (${cols.join(',')}) VALUES ${chunk.map(() => `(${cols.map(() => '?').join(',')})`).join(',')}${suffix}${returning ? ' RETURNING id' : ''}`;
+      const r = await exec(sql, chunk.flatMap((row) => cols.map((c) => row[c] ?? null)));
+      if (returning) ids.push(...r.rows.map((x) => Number(x.id)));
+    }
+    return ids;
+  }
+
   /* ================= accounts (not scoped to a user) ================= */
   async function createUser({ email, name, password, branch }) {
     email = String(email || '').trim().toLowerCase();
@@ -549,6 +562,39 @@ export function createStore(db) {
       return { ...base, stream, subjects: subjects.map(strip), topics: topics.map(strip), mistakes: mistakes.map(parseMistake), reviews: reviews.map(strip), tests: tests.map(parseTest), tasks: tasks.map(strip), studyLog: studyLog.map(strip), progress: progress.map(strip) };
     }
 
+    /* ---------- demo data (bulk; see src/demo.js) ---------- */
+    const TEST_COLS = ['user_id', 'stream_id', 'name', 'provider', 'date', 'type', 'total_questions', 'total_marks', 'marks_obtained', 'correct', 'incorrect', 'negative_marks', 'breakdown', 'created_at', 'updated_at'];
+    const MISTAKE_COLS = ['user_id', 'date_encountered', 'subject_id', 'topic_id', 'test_type', 'provider', 'test_name', 'test_id', 'question_no', 'question_text', 'solution', 'cause_primary', 'causes_secondary',
+      'difficulty', 'confidence', 'time_spent_sec', 'marks_lost', 'severity', 'tags', 'lesson', 'guessed', 'skipped_solvable', 'status', 'stage', 'streak', 'fail_count', 'recurrence_count', 'reopen_count',
+      'review_count', 'success_count', 'last_review', 'last_success', 'mastered_at', 'next_review', 'archived', 'created_at', 'updated_at'];
+    /** Insert pre-validated demo rows in a few batched statements. Every row is stamped with this user (and branch). */
+    async function insertDemo({ tests, mistakes, tasks, logs, progress }, streamId) {
+      const sid = await needStream(streamId);
+      const ts = now();
+      return tx(async () => {
+        const testIds = await insertMany('tests', TEST_COLS, tests.map((t) => ({ ...t, user_id: uid, stream_id: sid, breakdown: '[]', created_at: ts, updated_at: ts })), { returning: true });
+        const rows = mistakes.map((m) => ({ ...m.fields, user_id: uid, test_id: m.testIdx == null ? null : testIds[m.testIdx], causes_secondary: '[]', tags: JSON.stringify(m.fields.tags || []), archived: 0, created_at: ts, updated_at: ts }));
+        const mistakeIds = await insertMany('mistakes', MISTAKE_COLS, rows, { returning: true });
+        const reviews = mistakes.flatMap((m, i) => m.events.map((e) => ({ user_id: uid, mistake_id: mistakeIds[i], date: e.date, outcome: e.outcome, created_at: ts })));
+        await insertMany('reviews', ['user_id', 'mistake_id', 'date', 'outcome', 'created_at'], reviews);
+        await insertMany('tasks', ['user_id', 'stream_id', 'date', 'title', 'subject_id', 'kind', 'minutes', 'done', 'done_at', 'created_at'], tasks.map((t) => ({ ...t, user_id: uid, stream_id: sid, done_at: t.done ? ts : null, created_at: ts })));
+        await insertMany('study_log', ['user_id', 'stream_id', 'date', 'subject_id', 'minutes', 'activity', 'note', 'created_at'], logs.map((l) => ({ ...l, user_id: uid, stream_id: sid, created_at: ts })));
+        await insertMany('topic_progress', ['user_id', 'topic_id', 'studied', 'revision_count', 'pyq_done', 'notes', 'updated_at'], progress.map((p) => ({ ...p, user_id: uid, updated_at: ts })),
+          { suffix: ' ON CONFLICT (user_id, topic_id) DO UPDATE SET studied=excluded.studied, revision_count=excluded.revision_count, pyq_done=excluded.pyq_done, notes=excluded.notes, updated_at=excluded.updated_at' });
+        return { mistakes: mistakeIds.length, tests: testIds.length };
+      });
+    }
+    /** Delete only the demo rows ("sample" tag / "[Sample]" names / note "sample"), across all of this user's branches. */
+    async function removeDemoRows() {
+      return tx(async () => ({
+        mistakes: (await run(`DELETE FROM mistakes WHERE user_id = ? AND tags LIKE '%"sample"%'`, uid)).changes, // reviews go with them (ON DELETE CASCADE)
+        tests: (await run(`DELETE FROM tests WHERE user_id = ? AND name LIKE '[Sample]%'`, uid)).changes,
+        tasks: (await run(`DELETE FROM tasks WHERE user_id = ? AND title LIKE '[Sample]%'`, uid)).changes,
+        log: (await run(`DELETE FROM study_log WHERE user_id = ? AND note = 'sample'`, uid)).changes,
+        ticks: (await run(`UPDATE topic_progress SET studied = 0, revision_count = 0, pyq_done = 0, notes = '' WHERE user_id = ? AND notes = 'sample'`, uid)).changes,
+      }));
+    }
+
     return {
       bootstrap, listStreams, availableBranches, addBranch, getSettings, putSetting, recomputeAll,
       createMistake, updateMistake, getMistake, deleteMistake, duplicateMistake, bulk,
@@ -556,7 +602,7 @@ export function createStore(db) {
       saveTest, deleteTest, saveTask, deleteTask, addLog, deleteLog, putProgress,
       saveSubject, deleteSubject, saveTopic, deleteTopic, saveCause, deleteCause,
       saveAttachment, getAttachment,
-      inTransaction: tx, // lets src/demo.js load/remove demo data atomically
+      insertDemo, removeDemoRows,
     };
   }
 

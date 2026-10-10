@@ -2,6 +2,7 @@
 // Everything created is tagged ("sample" tag, "[Sample]" names, note "sample") and only ever touches the signed-in
 // user's own account. removeDemo() deletes just those rows and leaves everything you entered yourself.
 import { addDays, isDate, todayStr } from '../public/shared/dates.js';
+import { initialState, applyEvent } from '../public/shared/srs.js';
 
 export const TAG = 'sample';
 const PLAN = { I: 'independent', P: 'partial', H: 'hint', F: 'failed', R: 'recurred' };
@@ -91,66 +92,57 @@ export async function loadDemo(S, streamId, today) {
   const subject = (name) => b.subjects.find((s) => s.name === name);
   const topicOf = (subj, i) => b.topics.filter((t) => t.subject_id === subj.id && !t.parent_id)[i];
   const cause = (kw) => b.causes.find((c) => new RegExp(kw, 'i').test(c.name)) || b.causes[0];
+  const srs = b.settings.srs;
 
-  return S.inTransaction(async () => {
-    const testIds = [];
-    for (const [name, provider, ago, type, marks, correct, incorrect, neg] of data.tests) {
-      const t = await S.saveTest(null, { name: `[Sample] ${name}`, provider, date: addDays(today, ago), type, total_questions: 65, total_marks: 100, marks_obtained: marks, correct, incorrect, negative_marks: neg }, streamId);
-      testIds.push(t.id);
+  // Everything is worked out here in memory (including each mistake's review schedule), then saved in a few
+  // batched statements — one query per row would be far too slow between Vercel and Supabase.
+  const tests = data.tests.map(([name, provider, ago, type, marks, correct, incorrect, neg]) => ({
+    name: `[Sample] ${name}`, provider, date: addDays(today, ago), type, total_questions: 65, total_marks: 100, marks_obtained: marks, correct, incorrect, negative_marks: neg,
+  }));
+  const mistakes = [];
+  for (const [subjName, ti, causeKw, question, solution, lesson, difficulty, marksLost, severity, confidence, testIdx, ago, plan] of data.rows) {
+    const subj = subject(subjName);
+    if (!subj) continue; // the user renamed or deleted that subject
+    const n = mistakes.length;
+    const date = addDays(today, -ago);
+    let st = initialState(date, srs);
+    const events = [];
+    for (const ch of plan) {
+      if (st.next_review > today) break; // that review day hasn't happened yet
+      const due = st.next_review;
+      const when = n % 3 === 0 && addDays(due, 1) <= today ? addDays(due, 1) : due; // some reviews a day late
+      events.push({ outcome: PLAN[ch], date: when });
+      st = applyEvent(st, { outcome: PLAN[ch], date: when }, srs);
     }
-    let n = 0;
-    for (const [subjName, ti, causeKw, question, solution, lesson, difficulty, marksLost, severity, confidence, testIdx, ago, plan] of data.rows) {
-      const subj = subject(subjName);
-      if (!subj) continue; // the user renamed or deleted that subject
-      const m = await S.createMistake({
-        subject_id: subj.id, topic_id: topicOf(subj, ti)?.id, cause_primary: cause(causeKw).id, question_text: question, solution, lesson, difficulty,
-        marks_lost: marksLost, severity, confidence, time_spent_sec: 60 + ((n * 37) % 240), test_id: testIds[testIdx], date_encountered: addDays(today, -ago),
-        question_no: String(3 + ((n * 7) % 60)), tags: [TAG], guessed: n % 6 === 0, skipped_solvable: n % 9 === 0,
-      }, today);
-      let cur = m;
-      for (const ch of plan) {
-        if (cur.next_review > today) break; // that review day hasn't happened yet
-        const due = cur.next_review;
-        const date = n % 3 === 0 && addDays(due, 1) <= today ? addDays(due, 1) : due; // some reviews a day late
-        cur = await S.addReview(m.id, { outcome: PLAN[ch], date });
-      }
-      n++;
-    }
-    for (const [i, [title, subjName, kind, minutes]] of data.tasks.entries()) {
-      const date = addDays(today, i - 2);
-      const t = await S.saveTask(null, { date, title: `[Sample] ${title}`, subject_id: subject(subjName)?.id, kind, minutes }, 0, streamId);
-      if (date < today) await S.saveTask(t.id, { done: i % 3 !== 0 });
-    }
-    const subs = data.logSubjects.map(subject).filter(Boolean);
-    for (let d = 24; d >= 0; d--) {
-      if ((d * 7) % 5 === 0) continue; // a few rest days
-      await S.addLog({ date: addDays(today, -d), subject_id: subs[d % subs.length]?.id, minutes: 60 + ((d * 25) % 200), activity: ['Study', 'Revision', 'Practice', 'PYQ'][d % 4], note: TAG }, streamId);
-    }
-    for (const [subjName, count] of data.progress) {
-      const subj = subject(subjName);
-      if (!subj) continue;
-      for (const [i, t] of b.topics.filter((x) => x.subject_id === subj.id && !x.parent_id).slice(0, count).entries()) {
-        await S.putProgress(t.id, { studied: true, revision_count: i % 3, pyq_done: i % 4 === 0, notes: TAG });
-      }
-    }
-    return { already: false, mistakes: n, tests: testIds.length };
+    mistakes.push({
+      testIdx,
+      events,
+      fields: {
+        date_encountered: date, subject_id: subj.id, topic_id: topicOf(subj, ti)?.id ?? null, test_type: 'mock', provider: tests[testIdx].provider, test_name: tests[testIdx].name,
+        question_no: String(3 + ((n * 7) % 60)), question_text: question, solution, cause_primary: cause(causeKw).id, difficulty, confidence, time_spent_sec: 60 + ((n * 37) % 240),
+        marks_lost: marksLost, severity, tags: [TAG], lesson, guessed: n % 6 === 0 ? 1 : 0, skipped_solvable: n % 9 === 0 ? 1 : 0, ...st,
+      },
+    });
+  }
+  const tasks = data.tasks.map(([title, subjName, kind, minutes], i) => {
+    const date = addDays(today, i - 2);
+    return { date, title: `[Sample] ${title}`, subject_id: subject(subjName)?.id ?? null, kind, minutes, done: date < today && i % 3 !== 0 ? 1 : 0 };
   });
+  const subs = data.logSubjects.map(subject).filter(Boolean);
+  const logs = [];
+  for (let d = 24; d >= 0; d--) {
+    if ((d * 7) % 5 === 0) continue; // a few rest days
+    logs.push({ date: addDays(today, -d), subject_id: subs[d % subs.length]?.id ?? null, minutes: 60 + ((d * 25) % 200), activity: ['Study', 'Revision', 'Practice', 'PYQ'][d % 4], note: TAG });
+  }
+  const progress = [];
+  for (const [subjName, count] of data.progress) {
+    const subj = subject(subjName);
+    if (!subj) continue;
+    b.topics.filter((x) => x.subject_id === subj.id && !x.parent_id).slice(0, count).forEach((t, i) => progress.push({ topic_id: t.id, studied: 1, revision_count: i % 3, pyq_done: i % 4 === 0 ? 1 : 0, notes: TAG }));
+  }
+  const r = await S.insertDemo({ tests, mistakes, tasks, logs, progress }, streamId);
+  return { already: false, ...r };
 }
 
 /** Deletes only the demo rows (in every branch of this account); your own entries stay. */
-export async function removeDemo(S) {
-  return S.inTransaction(async () => {
-    let mistakes = 0, tests = 0, tasks = 0, log = 0, ticks = 0;
-    for (const st of await S.listStreams()) {
-      const b = await S.bootstrap(st.id);
-      const ids = b.mistakes.filter((m) => m.tags.includes(TAG)).map((m) => m.id);
-      if (ids.length) await S.bulk({ ids, action: 'delete' });
-      mistakes += ids.length;
-      for (const t of b.tests.filter((t) => t.name.startsWith('[Sample]'))) (await S.deleteTest(t.id), tests++);
-      for (const t of b.tasks.filter((t) => t.title.startsWith('[Sample]'))) (await S.deleteTask(t.id), tasks++);
-      for (const l of b.studyLog.filter((l) => l.note === TAG)) (await S.deleteLog(l.id), log++);
-      for (const p of b.progress.filter((p) => p.notes === TAG)) (await S.putProgress(p.topic_id, { studied: false, revision_count: 0, pyq_done: false, notes: '' }), ticks++);
-    }
-    return { mistakes, tests, tasks, log, ticks };
-  });
-}
+export const removeDemo = (S) => S.removeDemoRows();
