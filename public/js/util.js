@@ -73,7 +73,7 @@ export function showLogin() {
         btn.disabled = false;
       }
     });
-    request('GET', '/api/session').then((r) => r.json()).then((s) => (info = s)).catch(() => {}).finally(draw);
+    request('GET', '/api/session').then((r) => r.json()).then((s) => (info = s.branches ? s : info)).catch(() => {}).finally(draw);
   });
   return loginPromise;
 }

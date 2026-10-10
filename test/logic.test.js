@@ -192,3 +192,66 @@ test('planner: orders buckets, fits the time budget, skips what does not fit', (
   assert.equal(tight.items[0].mistake.id, 1);
   assert.ok(tight.skipped.length > 0);
 });
+
+import { explainDbError, checkUrl, describeUrl } from '../src/dbdiag.js';
+
+test('db diagnosis: explains common Supabase/Vercel connection mistakes in plain English, never echoing the password', () => {
+  const ok = 'postgresql://postgres.abcdefgh:s3cretPw@aws-0-ap-south-1.pooler.supabase.com:6543/postgres';
+  assert.equal(checkUrl(ok), null);
+  assert.match(checkUrl('').message, /not set/);
+  assert.match(checkUrl('postgresql://postgres.abcd:pw@…pooler.supabase.com:6543/postgres').message, /shortened/);
+  assert.match(checkUrl('postgresql://postgres.abcd:[YOUR-PASSWORD]@aws-0-x.pooler.supabase.com:6543/postgres').message, /placeholder/);
+  assert.match(checkUrl('https://xyz.supabase.co').message, /instead of postgresql/);
+  assert.match(checkUrl('not a url').message, /not a valid/);
+  assert.match(checkUrl('postgresql://postgres:pw@aws-0-x.pooler.supabase.com:6543/postgres').message, /postgres\.<project-ref>/);
+  assert.match(checkUrl('postgresql://postgres.abc@aws-0-x.pooler.supabase.com:6543/postgres').message, /no password/);
+
+  assert.match(explainDbError({ code: '28P01', message: 'password authentication failed for user "x"' }, ok).message, /rejected the password/);
+  assert.match(explainDbError({ message: 'Tenant or user not found' }, ok).message, /username or region/);
+  assert.match(explainDbError({ code: 'ENOTFOUND' }, 'postgresql://postgres:pw@db.abcdefgh.supabase.co:5432/postgres').hint, /Direct connection/);
+  assert.match(explainDbError({ code: 'ECONNREFUSED' }, ok).message, /refused/);
+  assert.match(explainDbError({ code: 'ETIMEDOUT' }, ok).hint, /paused/);
+  assert.match(explainDbError(new Error('something odd'), ok).message, /something odd/);
+  for (const e of [{ code: '28P01', message: 'x' }, { code: 'ENOTFOUND' }, new Error('boom')]) assert.ok(!JSON.stringify(explainDbError(e, ok)).includes('s3cretPw'));
+
+  const d = describeUrl(ok);
+  assert.deepEqual([d.host, d.port, d.pooler, d.usernameLooksRight, d.passwordLength], ['aws-0-ap-south-1.pooler.supabase.com', '6543', true, true, 8]);
+  assert.ok(!JSON.stringify(d).includes('s3cretPw'));
+});
+
+test('vercel function: /api/health and API calls report a clear reason when the database cannot be reached', async () => {
+  const mod = await import('../api/[...path].js');
+  const call = async (url) => {
+    let status, body = '';
+    await mod.default({ url, method: 'GET', headers: {} }, { writeHead: (s) => (status = s), end: (b) => (body += b) });
+    return { status, body: JSON.parse(body) };
+  };
+  const saved = process.env.DATABASE_URL;
+  try {
+    delete process.env.DATABASE_URL;
+    let r = await call('/api/health');
+    assert.equal(r.body.ok, false);
+    assert.match(r.body.steps[0].message, /not set/);
+    r = await call('/api/session');
+    assert.equal(r.status, 503);
+    assert.match(r.body.error, /DATABASE_URL is not set/);
+
+    process.env.DATABASE_URL = 'postgresql://postgres.abcd:topsecretpw@127.0.0.1:1/postgres'; // nothing listens on port 1
+    r = await call('/api/health');
+    assert.equal(r.body.ok, false);
+    assert.equal(r.body.steps[1].ok, false);
+    assert.match(r.body.steps[1].message, /refused/);
+    assert.ok(!JSON.stringify(r.body).includes('topsecretpw'));
+    r = await call('/api/session');
+    assert.equal(r.status, 500);
+    assert.match(r.body.error, /Cannot reach the database/);
+    assert.ok(!JSON.stringify(r.body).includes('topsecretpw'));
+
+    process.env.DATABASE_URL = 'postgresql://postgres.abcd:topsecretpw@no-such-host.invalid:6543/postgres';
+    r = await call('/api/health');
+    assert.match(r.body.steps[1].message, /could not be found/);
+  } finally {
+    if (saved === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = saved;
+  }
+});

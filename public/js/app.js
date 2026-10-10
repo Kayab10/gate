@@ -69,6 +69,11 @@ export async function refresh(reload = true) {
     window.scrollTo(0, y);
   } catch (e) {
     fail(e);
+    if (!D.loaded) {
+      // nothing could be loaded at all (typically the database is not reachable): say so instead of showing a blank page
+      main.innerHTML = `<div class="card" style="max-width:640px"><h2>Can’t load your data</h2><p class="pre">${esc(e.message)}</p><div class="row"><a class="btn" href="/api/health" target="_blank" rel="noopener">Run the connection check</a><button class="btn primary" id="retry">Try again</button></div></div>`;
+      $('#retry').addEventListener('click', () => refresh());
+    }
   }
 }
 
