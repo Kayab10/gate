@@ -1,4 +1,4 @@
-// HTTP layer: JSON API (+ static files for local dev). Used by api/[...path].js on Vercel and by server.js locally.
+// HTTP layer: JSON API (+ static files for local dev). Used by api/[...path].js on Vercel and by dev-server.js locally.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';

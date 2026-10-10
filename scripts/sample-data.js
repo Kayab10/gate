@@ -1,5 +1,5 @@
 // Demo data for trying out the UI (Mechanical Engineering stream). Everything it creates is tagged so it can be removed again:
-//   node scripts/sample-data.js           add sample data (app must be running locally: node server.js)
+//   node scripts/sample-data.js           add sample data (app must be running locally: node dev-server.js)
 //   node scripts/sample-data.js --remove  delete only the sample data
 // Uses the running app's HTTP API. Set PORT if the app is not on 5050.
 const BASE = `http://localhost:${process.env.PORT || 5050}`;

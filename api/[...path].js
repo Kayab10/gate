@@ -1,5 +1,5 @@
 // Vercel serverless entry: every /api/* request lands here.
-import { createHandler } from '../src/app.js';
+import { createHandler } from '../src/handler.js';
 import { pgAdapter } from '../src/db.js';
 
 let ready = null; // reused across invocations while the function stays warm

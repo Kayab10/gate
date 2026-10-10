@@ -6,7 +6,7 @@ if %errorlevel%==0 (
   start "" http://localhost:5050
   exit /b
 )
-title GATE DA Tracker (close this window to stop)
+title GATE Tracker (close this window to stop)
 start "" cmd /c "timeout /t 2 >nul & start http://localhost:5050"
-node --no-warnings server.js
+node --no-warnings dev-server.js
 pause

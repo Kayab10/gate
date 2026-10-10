@@ -5,7 +5,7 @@ A mistake tracker, spaced-review scheduler, test log and study planner. It is a 
 One password, entered once per device (stays signed in for a year). After login you choose **what you are studying** (a *stream*); each stream has its own syllabus, mistakes, tests and schedule. It ships with **Mechanical Engineering (ME)**, seeded from the GATE 2027 ME syllabus; more streams can be added from the chooser.
 
 - **Put it online and install it:** see [DEPLOY.md](DEPLOY.md).
-- **Try it locally first:** `node server.js` → http://localhost:5050 (an in-process Postgres in `data/pglite`, no accounts needed). Node 22+.
+- **Try it locally first:** `node dev-server.js` → http://localhost:5050 (an in-process Postgres in `data/pglite`, no accounts needed). Node 22+.
 
 ## Pages
 

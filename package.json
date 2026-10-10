@@ -8,8 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "node dev-server.js",
     "test": "node --test --no-warnings test/*.test.js"
   },
   "dependencies": {

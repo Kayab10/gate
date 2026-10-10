@@ -2,7 +2,7 @@
 // in-process Postgres (PGlite) stored in ./data/pglite so you can try everything offline.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createApp } from './src/app.js';
+import { createApp } from './src/handler.js';
 import { pgAdapter, pgliteAdapter } from './src/db.js';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
