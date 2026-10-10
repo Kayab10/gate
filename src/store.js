@@ -152,9 +152,9 @@ export function createStore(db) {
     }
 
     /* ---------- settings ---------- */
-    async function getSettings() {
+    const buildSettings = (rows) => {
       const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-      for (const r of await q('SELECT key, value FROM settings WHERE user_id = ?', uid)) {
+      for (const r of rows) {
         try {
           const v = JSON.parse(r.value);
           out[r.key] = Array.isArray(v) || typeof v !== 'object' || v === null ? v : { ...out[r.key], ...v };
@@ -164,6 +164,9 @@ export function createStore(db) {
       }
       out.srs = normalizeSrs(out.srs);
       return out;
+    };
+    async function getSettings() {
+      return buildSettings(await q('SELECT key, value FROM settings WHERE user_id = ?', uid));
     }
     async function putSetting(key, value) {
       if (!(key in DEFAULT_SETTINGS)) throw bad('key', 'unknown setting');
@@ -540,26 +543,39 @@ export function createStore(db) {
     }
 
     /* ---------- everything the UI needs for the chosen branch ---------- */
+    // ONE round trip: a single statement returns every list as JSON. (Each query is a network hop between Vercel and
+    // Supabase, so fifteen separate queries made every page load and every click slow.)  $1 = user, $2 = chosen branch.
+    const agg = (select, order = '') => `COALESCE((SELECT json_agg(t${order ? ' ORDER BY ' + order : ''}) FROM (${select}) t), '[]'::json)`;
+    const IN_SUBJECTS = 'SELECT id FROM subjects WHERE user_id = $1 AND stream_id = $2';
+    const BOOTSTRAP_SQL = `SELECT
+      (SELECT row_to_json(u) FROM (SELECT id, email, name FROM users WHERE id = $1) u) AS "user",
+      ${agg('SELECT key, value FROM settings WHERE user_id = $1')} AS settings,
+      ${agg('SELECT * FROM causes WHERE user_id = $1', 't.sort, t.id')} AS causes,
+      ${agg(`SELECT s.id, s.code, s.name, s.sort,
+          (SELECT COUNT(*)::int FROM subjects x WHERE x.stream_id = s.id) AS subjects,
+          (SELECT COUNT(*)::int FROM mistakes m JOIN subjects x ON x.id = m.subject_id WHERE x.stream_id = s.id AND m.archived = 0) AS mistakes
+        FROM streams s WHERE s.user_id = $1`, 't.sort, t.id')} AS streams,
+      ${agg('SELECT * FROM subjects WHERE user_id = $1 AND stream_id = $2', 't.sort, t.id')} AS subjects,
+      ${agg(`SELECT * FROM topics WHERE user_id = $1 AND subject_id IN (${IN_SUBJECTS})`, 't.sort, t.id')} AS topics,
+      ${agg(`SELECT * FROM mistakes WHERE user_id = $1 AND subject_id IN (${IN_SUBJECTS})`, 't.id')} AS mistakes,
+      ${agg(`SELECT r.* FROM reviews r JOIN mistakes m ON m.id = r.mistake_id WHERE r.user_id = $1 AND m.subject_id IN (${IN_SUBJECTS})`, 't.date, t.id')} AS reviews,
+      ${agg('SELECT * FROM tests WHERE user_id = $1 AND stream_id = $2', 't.date, t.id')} AS tests,
+      ${agg('SELECT * FROM tasks WHERE user_id = $1 AND stream_id = $2', 't.date, t.id')} AS tasks,
+      ${agg('SELECT * FROM study_log WHERE user_id = $1 AND stream_id = $2', 't.date, t.id')} AS study_log,
+      ${agg(`SELECT p.* FROM topic_progress p JOIN topics tp ON tp.id = p.topic_id WHERE p.user_id = $1 AND tp.subject_id IN (${IN_SUBJECTS})`)} AS progress`;
     async function bootstrap(streamId) {
-      const [user, settings, causes, streams, available] = await Promise.all([getUser(uid), getSettings(), q('SELECT * FROM causes WHERE user_id=? ORDER BY sort, id', uid), listStreams(), availableBranches()]);
+      const r = (await exec(BOOTSTRAP_SQL, [uid, Number(streamId) || 0])).rows[0];
       // a valid cookie for an account that no longer exists (e.g. the database was recreated) counts as signed out
-      if (!user) throw Object.assign(new Error('login'), { status: 401 });
-      const base = { today: todayStr(), user, streams, available, settings, causes: causes.map(strip) };
-      const stream = streams.find((x) => x.id === Number(streamId));
+      if (!r.user) throw Object.assign(new Error('login'), { status: 401 });
+      const have = new Set(r.streams.map((x) => x.code));
+      const base = { today: todayStr(), user: r.user, streams: r.streams.map(({ sort, ...x }) => x), available: BRANCHES.filter((b) => !have.has(b.code)), settings: buildSettings(r.settings), causes: r.causes.map(strip) };
+      const stream = base.streams.find((x) => x.id === Number(streamId));
       if (!stream) return { ...base, needsStream: true };
-      const sid = stream.id;
-      const inSubjects = 'SELECT id FROM subjects WHERE user_id = ? AND stream_id = ?';
-      const [subjects, topics, mistakes, reviews, tests, tasks, studyLog, progress] = await Promise.all([
-        q('SELECT * FROM subjects WHERE user_id=? AND stream_id=? ORDER BY sort, id', uid, sid),
-        q(`SELECT * FROM topics WHERE user_id=? AND subject_id IN (${inSubjects}) ORDER BY sort, id`, uid, uid, sid),
-        q(`SELECT * FROM mistakes WHERE user_id=? AND subject_id IN (${inSubjects}) ORDER BY id`, uid, uid, sid),
-        q(`SELECT r.* FROM reviews r JOIN mistakes m ON m.id = r.mistake_id WHERE r.user_id=? AND m.subject_id IN (${inSubjects}) ORDER BY r.date, r.id`, uid, uid, sid),
-        q('SELECT * FROM tests WHERE user_id=? AND stream_id=? ORDER BY date, id', uid, sid),
-        q('SELECT * FROM tasks WHERE user_id=? AND stream_id=? ORDER BY date, id', uid, sid),
-        q('SELECT * FROM study_log WHERE user_id=? AND stream_id=? ORDER BY date, id', uid, sid),
-        q(`SELECT p.* FROM topic_progress p JOIN topics t ON t.id = p.topic_id WHERE p.user_id=? AND t.subject_id IN (${inSubjects})`, uid, uid, sid),
-      ]);
-      return { ...base, stream, subjects: subjects.map(strip), topics: topics.map(strip), mistakes: mistakes.map(parseMistake), reviews: reviews.map(strip), tests: tests.map(parseTest), tasks: tasks.map(strip), studyLog: studyLog.map(strip), progress: progress.map(strip) };
+      return {
+        ...base, stream,
+        subjects: r.subjects.map(strip), topics: r.topics.map(strip), mistakes: r.mistakes.map(parseMistake), reviews: r.reviews.map(strip),
+        tests: r.tests.map(parseTest), tasks: r.tasks.map(strip), studyLog: r.study_log.map(strip), progress: r.progress.map(strip),
+      };
     }
 
     /* ---------- demo data (bulk; see src/demo.js) ---------- */

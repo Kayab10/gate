@@ -187,6 +187,13 @@ export async function seedBranch(q, uid, code) {
 /* ---------------------------- migrate ---------------------------- */
 
 export async function initDb(db) {
+  // Fast path (every warm start and nearly every cold start): one query to see that the schema is already current.
+  try {
+    const v = (await db.query('SELECT COALESCE(MAX(version), 0)::int AS v FROM schema_migrations')).rows[0].v;
+    if (v === MIGRATIONS.length && (await db.query("SELECT to_regclass('public.users') AS t")).rows[0].t) return;
+  } catch {
+    /* no schema_migrations table yet (brand-new database): fall through to the full migration below */
+  }
   const c = await db.connect();
   try {
     await c.exec('BEGIN');
