@@ -1,6 +1,6 @@
 // Service worker: makes the app installable and keeps the app shell available offline.
 // Data is never cached here — /api/* always goes to the network, so every device sees the same database.
-const CACHE = 'gate-shell-v1';
+const CACHE = 'gate-shell-v2';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

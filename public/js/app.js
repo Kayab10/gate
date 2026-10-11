@@ -43,6 +43,7 @@ function drawNav() {
   const dueN = D.live.filter((m) => m.status !== 'mastered' && m.next_review <= D.today).length;
   const cur = current()[0];
   $('#navList').innerHTML = ROUTES.map(([k, label]) => `<li><a class="nav" href="#/${k}"${k === cur ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg><span class="lbl">${label}</span>${k === 'review' && dueN ? `<span class="pill" aria-label="${dueN} due">${dueN}</span>` : ''}</a></li>`).join('');
+  $('#topTitle').textContent = current()[1];
   $('#userLine').textContent = D.user?.name || D.user?.email || '';
   $('#streamBtn').innerHTML = `<span><b>${esc(D.stream.code)}</b> · ${esc(D.stream.name)}</span><span>⇄</span>`;
   const exam = D.settings.general.examDate;
@@ -110,6 +111,42 @@ $('#themeBtn').addEventListener('click', () => {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('theme', t); } catch {}
 });
+
+// ---- mobile: slide-in menu ----
+const setMenu = (open) => {
+  document.body.classList.toggle('menu-open', open);
+  $('#menuBtn').setAttribute('aria-expanded', String(open));
+};
+$('#menuBtn').addEventListener('click', () => setMenu(!document.body.classList.contains('menu-open')));
+$('#scrim').addEventListener('click', () => setMenu(false));
+$('#navList').addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
+window.addEventListener('hashchange', () => setMenu(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
+$('#topAdd').addEventListener('click', () => openMistakeForm({ onSaved: () => refresh() }));
+$('#quickAdd').addEventListener('click', () => setMenu(false));
+// swipe: right from the left edge opens, left closes
+let sx = null, sy = null;
+document.addEventListener('touchstart', (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, { passive: true });
+document.addEventListener('touchend', (e) => {
+  if (sx == null) return;
+  const t = e.changedTouches[0], dx = t.clientX - sx, dy = Math.abs(t.clientY - sy);
+  const open = document.body.classList.contains('menu-open');
+  if (dy < 40 && !open && sx < 24 && dx > 70) setMenu(true);
+  else if (dy < 40 && open && dx < -60) setMenu(false);
+  sx = null;
+}, { passive: true });
+
+// ---- mobile: wide tables become stacked cards (labels come from the header cells) ----
+function labelTables() {
+  main.querySelectorAll('.tablewrap > table:not([data-cards])').forEach((tb) => {
+    const heads = [...tb.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+    if (heads.length < 4) return;
+    tb.dataset.cards = '1';
+    tb.classList.add('cards');
+    tb.querySelectorAll('tbody tr').forEach((tr) => [...tr.children].forEach((td, i) => { if (heads[i]) td.dataset.l = heads[i]; }));
+  });
+}
+new MutationObserver(labelTables).observe(main, { childList: true, subtree: true });
 
 // If the page has been left open overnight, refresh the date-dependent data when it regains focus.
 let lastDay = null;

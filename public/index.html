@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GATE Tracker</title>
 <meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
@@ -19,8 +19,14 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="iconbtn" id="menuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="sidenav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <div class="topbar-title" id="topTitle">GATE</div>
+  <button class="iconbtn accent" id="topAdd" aria-label="Quick add a mistake"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+</header>
+<div class="scrim" id="scrim"></div>
 <div class="shell">
-  <nav class="side" aria-label="Main">
+  <nav class="side" id="sidenav" aria-label="Main">
     <div class="brand"><span class="logo" aria-hidden="true">✓</span> GATE <small>2027</small></div>
     <button class="btn primary wide" id="quickAdd" title="Quick add a mistake (press N)">＋ Quick add <kbd>N</kbd></button>
     <ul id="navList"></ul>
