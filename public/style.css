@@ -132,7 +132,7 @@ details.card > summary { list-style: none; } details.card > summary::-webkit-det
 
 .pomo-clock { font-size: clamp(3.4rem, 14vw, 5.5rem); font-weight: 700; letter-spacing: -.04em; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; margin: 6px 0; }
 .pomo[data-mode=short] .pomo-clock, .pomo[data-mode=long] .pomo-clock { color: var(--good); } .pomo[data-mode=short] .prog > div, .pomo[data-mode=long] .prog > div { background: var(--good); }
-.pomo .tabs { display: flex; } .pomo .tabs button { flex: 1; white-space: nowrap; }
+.pomo-task select { width: 100%; } .pomo .tabs { display: flex; } .pomo .tabs button { flex: 1; white-space: nowrap; }
 
 /* ---------- tables ---------- */
 table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }

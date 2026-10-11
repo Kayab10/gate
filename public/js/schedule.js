@@ -125,7 +125,7 @@ function studyLog(host, refresh) {
 </div>
 <div id="pomo"></div>
 <div class="grid g2">
-<section class="card"><h2>Log study time</h2>
+<details class="card"><summary class="row between" style="cursor:pointer"><h2 style="margin:0">Add time manually</h2><span class="muted small">optional — the focus timer logs for you</span></summary><div style="margin-top:12px">
 <form id="lf" class="fgrid" autocomplete="off">
   <label><span class="lab">Date</span><input type="date" name="date" value="${esc(D.today)}" max="${esc(D.today)}" required></label>
   <label><span class="lab">Subject</span><select name="subject_id"><option value="">—</option>${subjectOpts()}</select></label>
@@ -134,7 +134,7 @@ function studyLog(host, refresh) {
   <label><span class="lab">Activity</span><select name="activity">${opts(ACTIVITIES.map((a) => [a, a]), 'Study')}</select></label>
   <label><span class="lab">Note</span><input name="note" maxlength="1000"></label>
   <div><button class="btn primary">Log time</button></div>
-</form></section>
+</form></div></details>
 <section class="card"><h2>This week by subject</h2>${subTotals.length ? `<div class="bars">${subTotals.sort((a, b) => b.m - a.m).map((x) => `<div class="br"><span>${esc(x.s.name)}</span><div class="track"><div class="fill" style="width:${(x.m / maxSub) * 100}%"></div></div><span class="right">${dur(x.m)}</span></div>`).join('')}</div>` : empty('Nothing logged this week yet.')}</section>
 </div>
 <section class="card"><h2>Consistency (last 16 weeks)</h2><div class="cal" aria-label="Study consistency calendar">${cells.join('')}</div><p class="hint">Darker = closer to your daily target${target ? '' : ' (no target set — using 4 h; set one in Settings)'}. Columns are weeks, rows Monday → Sunday.</p></section>
