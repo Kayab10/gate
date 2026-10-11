@@ -5,7 +5,7 @@ A mistake tracker, spaced-review scheduler, test log and study planner. It is a 
 **Accounts:** sign up with email + password and choose your branch (**DA** or **ME**); you stay signed in on that device for a year. Everyone's data — syllabus, mistakes, tests, schedule, settings, screenshots — is completely separate (each account gets its own copy of the syllabus for its branch, and every query is scoped to the signed-in user). You can add the other branch to your account later.
 
 - **Put it online and install it:** see [DEPLOY.md](DEPLOY.md).
-- **Try it locally first:** `node dev-server.js` → http://localhost:5050 (an in-process Postgres in `data/pglite`, no accounts needed). Node 22+.
+- **Try it locally first:** `node dev-server.js` → http://localhost:5050 (an in-process Postgres in `data/pglite`; create a local account on first visit). Node 22+.
 
 ## Pages
 
@@ -62,14 +62,16 @@ Covers scheduling, priority, planner, analytics, API validation, bulk operations
 ## Layout
 
 ```
-api/index.js          Vercel serverless entry (all /api/* rewritten here)     src/       db (Postgres + migrations), store, validation, HTTP
-public/            the app (no build step)     public/shared/  pure logic used by browser + server
-test/              node:test suites            scripts/   icons, demo-data, reset-password
+api/index.js          Vercel serverless entry (all /api/* rewritten here)
+src/                  db (Postgres + migrations), store, validation, HTTP
+public/               the app (no build step); public/shared/ = pure logic used by browser + server
+test/                 node:test suites
+scripts/              icons, demo-data, reset-password
 ```
 
 ## Known limitations
 
-- Single user. Needs internet (the service worker only keeps the app shell for faster loads; data is always live).
-- Dates use each device's local day. The server stores whatever date the browser sends.
+- Needs internet (the service worker only keeps the app shell for faster loads; data is always live).
+- Dates use each device's local day; the browser always sends its date (the server's own date is only a fallback).
 - Mastery-progression chart shows what is *currently* mastered over time (a later reopening removes the earlier point).
-- Not tested against a live Supabase/Vercel deployment from this machine; the Postgres code is tested on PGlite, and the thin `pg` connection adapter is exercised only when you deploy.
+- The Postgres code is tested on PGlite; the thin `pg` connection adapter is only exercised on a real deployment.

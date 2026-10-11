@@ -575,3 +575,35 @@ test('a valid session cookie for an account that no longer exists is treated as 
   assert.equal((await (await fetch(`${wiped.base}/api/session`, { headers: { Cookie: cookie } })).json()).loggedIn, false);
   await wiped.app.close();
 });
+
+test('regressions: partial test edits, subject change clears topic, cause delete guard, review date, done_at, bulk count, general setting', async () => {
+  const { app, call } = await boot(tmp());
+  const b = await boots({ call });
+  const [s1, s2] = b.subjects;
+  const topic = b.topics.find((t) => t.subject_id === s1.id && !t.parent_id);
+  const [c1, c2] = b.causes;
+  // partial test update is checked against the stored record
+  const t = (await call('POST', '/api/tests', { name: 'T', date: D(-1), total_questions: 10, correct: 5, incorrect: 3 })).body;
+  assert.equal((await call('PUT', `/api/tests/${t.id}`, { total_questions: 6 })).status, 400);
+  assert.equal((await call('PUT', `/api/tests/${t.id}`, { correct: 8 })).status, 400);
+  assert.equal((await call('PUT', `/api/tests/${t.id}`, { correct: 6 })).status, 200);
+  // moving to another subject drops the old topic
+  const m = (await call('POST', '/api/mistakes', { subject_id: s1.id, topic_id: topic.id, cause_primary: c1.id, causes_secondary: [c2.id], date_encountered: D(-3) })).body;
+  const moved = (await call('PUT', `/api/mistakes/${m.id}`, { subject_id: s2.id })).body;
+  assert.equal(moved.topic_id, null);
+  // a cause used only as a contributing cause cannot be deleted
+  assert.equal((await call('DELETE', `/api/causes/${c2.id}`)).status, 400);
+  // review cannot be edited to before the mistake
+  const withReview = (await call('POST', `/api/mistakes/${m.id}/reviews`, { outcome: 'independent', date: D(-1) })).body;
+  void withReview;
+  const rid = (await boots({ call })).reviews[0].id;
+  assert.equal((await call('PUT', `/api/reviews/${rid}`, { date: D(-10) })).status, 400);
+  // tasks created as done get done_at
+  const task = (await call('POST', '/api/tasks', { title: 'x', date: D(0), done: true })).body;
+  assert.ok(task.done_at);
+  // bulk delete reports real deletions
+  assert.equal((await call('POST', '/api/mistakes/bulk', { ids: [m.id, 999999], action: 'delete' })).body.count, 1);
+  // general setting must be an object
+  assert.equal((await call('PUT', '/api/settings/general', { value: null })).status, 400);
+  await app.close();
+});

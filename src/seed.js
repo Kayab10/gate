@@ -1,5 +1,6 @@
-// Default streams (papers: DA and ME), syllabus and root causes. Seeded once into an empty database; everything is editable in Settings.
-// Syllabus source: GATE 2027 ME (Mechanical Engineering) syllabus, IIT Madras. Each area becomes a subject (grouped by its
+// Branch templates (DA and ME): syllabus and root causes. Each user gets their own copy when they pick a branch (see seedBranch in db.js);
+// everything is editable in Settings and edits never affect other users.
+// Syllabus source: the official GATE 2027 syllabi (DA and ME), IIT Madras. Each area becomes a subject (grouped by its
 // section) and each item listed in the syllabus becomes a topic.
 export const STREAMS = [
   {

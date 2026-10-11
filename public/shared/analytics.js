@@ -18,7 +18,7 @@ export function summary(mistakes, reviews, today) {
   return {
     total: ms.length,
     unresolved: unresolved.length,
-    dueToday: unresolved.filter((m) => m.next_review === today).length,
+    dueToday: unresolved.filter((m) => m.next_review <= today).length, // due now = today or overdue, same as the review queue
     overdue,
     repeated: ms.filter((m) => repeatCount(m) >= 2).length,
     mastered: ms.filter((m) => m.status === 'mastered').length,

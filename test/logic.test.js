@@ -145,7 +145,7 @@ test('analytics: summary counts due/overdue/repeated/mastered and ignores archiv
   ];
   const s = summary(ms, [], '2026-10-10');
   assert.equal(s.total, 4);
-  assert.equal(s.dueToday, 1);
+  assert.equal(s.dueToday, 2); // due now = today + overdue (same as the review queue)
   assert.equal(s.overdue, 1);
   assert.equal(s.mastered, 1);
   assert.equal(s.repeated, 1);

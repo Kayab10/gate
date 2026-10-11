@@ -17,7 +17,7 @@ async function health(res) {
   const step = (name, ok, extra = {}) => (report.steps.push({ step: name, ok, ...extra }), ok);
 
   const bad = checkUrl(url);
-  if (!step('DATABASE_URL is set and looks right', !bad, bad || { details: describeUrl(url) })) return json(res, 200, report);
+  if (!step('DATABASE_URL is set and looks right', !bad, bad || { details: (({ pooler, usernameLooksRight }) => ({ pooler, usernameLooksRight }))(describeUrl(url) || {}) })) return json(res, 200, report);
 
   const mod = await import('pg');
   const pg = mod.default;

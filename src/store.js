@@ -178,6 +178,7 @@ export function createStore(db) {
         value = NORMALIZERS[key](value);
       }
       if (key === 'general') {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('general', 'must be an object');
         if (value.examDate && !isDate(value.examDate)) throw bad('examDate', 'must be a date');
         value = { ...DEFAULT_SETTINGS.general, ...value };
       }
@@ -269,7 +270,10 @@ export function createStore(db) {
       const cur = await one('SELECT subject_id, topic_id, cause_primary FROM mistakes WHERE id=? AND user_id=?', id, uid);
       if (!cur) throw notFound('Mistake');
       const v = validate(MISTAKE_SPEC, input, { partial: true });
-      await checkRefs({ ...v, subject_id: v.subject_id ?? cur.subject_id, topic_id: v.topic_id === undefined ? (v.subject_id ? null : cur.topic_id) : v.topic_id });
+      // moving a mistake to another subject (or topic) must not leave a stale topic/subtopic from the old one
+      if (v.subject_id != null && v.subject_id !== cur.subject_id && v.topic_id === undefined) v.topic_id = null;
+      if ((v.topic_id !== undefined && v.topic_id !== cur.topic_id || v.subject_id != null && v.subject_id !== cur.subject_id) && v.subtopic_id === undefined) v.subtopic_id = null;
+      await checkRefs({ ...v, subject_id: v.subject_id ?? cur.subject_id, topic_id: v.topic_id === undefined ? cur.topic_id : v.topic_id });
       if (v.causes_secondary) v.causes_secondary = v.causes_secondary.filter((c) => c !== (v.cause_primary ?? cur.cause_primary));
       const cols = MCOLS.filter((c) => v[c] !== undefined);
       if (cols.length) {
@@ -313,10 +317,11 @@ export function createStore(db) {
         set_next_review: { next_review_override: value },
       }[action];
       if (action === 'delete') {
+        let count = 0;
         await tx(async () => {
-          for (const id of ids) await run('DELETE FROM mistakes WHERE id=? AND user_id=?', id, uid);
+          for (const id of ids) count += (await run('DELETE FROM mistakes WHERE id=? AND user_id=?', id, uid)).changes;
         });
-        return { ok: true, count: ids.length };
+        return { ok: true, count };
       }
       if (action === 'add_tag') {
         const tag = String(value || '').trim();
@@ -356,6 +361,7 @@ export function createStore(db) {
       if (!r) throw notFound('Review');
       if (date !== undefined && !isDate(date)) throw bad('date', 'must be a date');
       if (outcome !== undefined && !OUTCOMES[outcome]) throw bad('outcome', 'invalid');
+      if (date !== undefined && date < (await one('SELECT date_encountered FROM mistakes WHERE id=? AND user_id=?', r.mistake_id, uid)).date_encountered) throw bad('date', 'review cannot be before the date the mistake was encountered');
       await tx(async () => {
         await run('UPDATE reviews SET date=?, outcome=?, note=? WHERE id=? AND user_id=?', date ?? r.date, outcome ?? r.outcome, note === undefined ? r.note : note, id, uid);
         await recompute(r.mistake_id);
@@ -387,9 +393,11 @@ export function createStore(db) {
         }
         v.breakdown = JSON.stringify(v.breakdown);
       }
-      const c = (v.correct ?? 0) + (v.incorrect ?? 0);
-      if (v.total_questions != null && c > v.total_questions) throw bad('correct', 'correct + incorrect exceeds total questions');
-      if (v.marks_obtained != null && v.total_marks != null && v.marks_obtained > v.total_marks) throw bad('marks_obtained', 'exceeds total marks');
+      const old = id ? await one('SELECT total_questions, correct, incorrect, total_marks, marks_obtained FROM tests WHERE id=? AND user_id=?', id, uid) : null;
+      if (id && !old) throw notFound('Test');
+      const m = { ...(old || {}), ...v }; // check the record as it will be after this save, not just the fields sent
+      if (m.total_questions != null && (m.correct ?? 0) + (m.incorrect ?? 0) > m.total_questions) throw bad('correct', 'correct + incorrect exceeds total questions');
+      if (m.marks_obtained != null && m.total_marks != null && m.marks_obtained > m.total_marks) throw bad('marks_obtained', 'exceeds total marks');
       const cols = Object.keys(v);
       const ts = now();
       if (id) {
@@ -415,6 +423,7 @@ export function createStore(db) {
       if (v.subject_id != null && !(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
       if (v.topic_id != null && !(await exists('SELECT 1 x FROM topics WHERE id=? AND user_id=?', v.topic_id, uid))) throw bad('topic_id', 'unknown topic');
       const ts = now();
+      if (!id && v.done) v.done_at = ts;
       if (id) {
         if (!(await exists('SELECT 1 x FROM tasks WHERE id=? AND user_id=?', id, uid))) throw notFound('Task');
         if ('done' in v) v.done_at = v.done ? ts : null;
@@ -528,6 +537,7 @@ export function createStore(db) {
     }
     async function deleteCause(id) {
       if (await exists('SELECT 1 x FROM mistakes WHERE cause_primary=? AND user_id=?', id, uid)) throw bad('cause', 'is the primary cause of existing mistakes; reassign them first');
+      if (await exists('SELECT 1 x FROM mistakes WHERE user_id=? AND causes_secondary::jsonb @> ?::jsonb', uid, JSON.stringify([id]))) throw bad('cause', 'is listed as a contributing cause on existing mistakes; remove it there first');
       if (!(await run('DELETE FROM causes WHERE id=? AND user_id=?', id, uid)).changes) throw notFound('Cause');
       return { ok: true };
     }

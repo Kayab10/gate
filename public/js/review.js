@@ -73,8 +73,10 @@ export function renderReview(host, refresh) {
     $('#card', root).innerHTML = cardHtml();
     started = Date.now();
   };
+  let busy = false;
   const record = async (outcome) => {
-    if (!cur) return;
+    if (!cur || busy) return; // a double-click must not record the same review twice
+    busy = true;
     try {
       const note = $('#rnote', root)?.value.trim();
       const res = await api('POST', `/api/mistakes/${cur.id}/reviews`, { outcome, date: reviewDate, note, time_spent_sec: Math.round((Date.now() - started) / 1000) });
@@ -84,7 +86,7 @@ export function renderReview(host, refresh) {
       revealed = false;
       toast(res.status === 'mastered' ? '🏆 Mastered — it moves to maintenance reviews' : `${OUTCOMES[outcome].label} → next review ${res.next_review}`);
       await refresh();
-    } catch (e) { fail(e); }
+    } catch (e) { fail(e); } finally { busy = false; }
   };
 
   root.addEventListener('click', (e) => {

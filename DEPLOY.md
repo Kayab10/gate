@@ -40,7 +40,7 @@ Push to GitHub (Vercel redeploys on its own). The database upgrades itself (migr
 ## Run locally (optional)
 
 ```bash
-node dev-dev-server.js  # http://localhost:5050 — uses an in-process Postgres in ./data/pglite, separate from the cloud
+node dev-server.js  # http://localhost:5050 — uses an in-process Postgres in ./data/pglite, separate from the cloud
 ```
 To run locally **against your cloud data**, set `DATABASE_URL` in the environment first. (Locally you create a separate account; nothing is shared with the cloud unless you use `DATABASE_URL`.)
 

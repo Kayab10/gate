@@ -14,7 +14,7 @@ const PRIORITY_FIELDS = [
 ];
 const PLANNER_FIELDS = [
   ['minutesEasy', 'Minutes per easy review'], ['minutesMedium', 'Minutes per medium review'], ['minutesHard', 'Minutes per hard review'], ['minutesDefault', 'Minutes if difficulty unknown'],
-  ['topicBlockMinutes', 'Weak-topic study block (min)'], ['maintenanceMax', 'Max maintenance items per day'], ['aheadDays', 'Pull high-impact items forward by up to (days)'],
+  ['maintenanceMax', 'Max maintenance items per day'], ['aheadDays', 'Pull high-impact items forward by up to (days)'],
 ];
 const openSubj = new Set();
 const openKeys = new Set(); // details sections the user has opened
@@ -26,7 +26,7 @@ export function renderSettings(host, refresh) {
   const numForm = (key, title, fields, defaults, intro = '') => `<section class="card"><h2>${title}</h2>${intro}<form data-set="${key}"><div class="fgrid">${fields.map(([k, l, h]) => `<label><span class="lab">${esc(l)}</span><input type="number" step="any" name="${k}" value="${esc(s[key][k] ?? defaults[k])}">${h ? `<span class="hint">${esc(h)}</span>` : ''}</label>`).join('')}</div><div class="row" style="margin-top:10px"><button class="btn primary">Save</button><button type="button" class="btn" data-reset="${key}">Reset to defaults</button></div></form></section>`;
 
   root.innerHTML = `
-<div class="page-head"><div><h1>Settings</h1><p>Everything is stored locally in <code>data/gate.db</code>.</p></div></div>
+<div class="page-head"><div><h1>Settings</h1><p>Saved to your account, so it is the same on every device.</p></div></div>
 <section class="card"><h2>General</h2><form data-set="general"><div class="fgrid">
   <label><span class="lab">Exam date</span><input type="date" name="examDate" value="${esc(s.general.examDate)}"><span class="hint">Used for the countdown. Check the official GATE 2027 schedule and enter the date yourself.</span></label>
   <label><span class="lab">Daily study target (minutes)</span><input type="number" name="dailyTargetMin" min="0" step="15" value="${esc(s.general.dailyTargetMin)}"></label>

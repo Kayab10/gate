@@ -6,12 +6,11 @@ import { lineChart, barList } from './charts.js';
 import { snippet, showMistake } from './mistakes.js';
 import { focusReview } from './review.js';
 
-let budget = null;
 let showAll = false;
 
 export function renderDashboard(host, refresh) {
   const root = mount(host);
-  budget ??= D.settings.general.defaultBudgetMin || 90;
+  const budget = D.settings.general.defaultBudgetMin || 90;
   const s = summary(D.mistakes, D.reviews, D.today);
   const wk = weekly(D.mistakes, D.reviews, D.tests, D.today, 12);
   const causes = causeStats(D.mistakes, D.causes);
@@ -23,7 +22,7 @@ export function renderDashboard(host, refresh) {
 
   const tile = (v, l, cls = '', tip = '') => `<div class="tile ${cls}" title="${esc(tip)}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
   root.innerHTML = `
-<div class="page-head"><div><h1>Dashboard</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}${exam ? ` · ${diffDays(exam, D.today)} days to the exam` : ''}</p></div></div>
+<div class="page-head"><div><h1>Dashboard</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}${exam ? ` · ${Math.max(0, diffDays(exam, D.today))} days to the exam` : ''}</p></div></div>
   <section class="card" style="margin-bottom:20px"><div class="row between"><h2 style="margin:0">Today’s schedule</h2><a href="#/schedule" class="small">Open schedule ›</a></div>
     ${todayTasks.length ? todayTasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)} ${t.minutes ? `<span class="muted small">${dur(t.minutes)}</span>` : ''}</span></div>`).join('') : '<p class="muted small" style="margin:8px 0 0">No tasks planned for today. Add some in the Schedule.</p>'}
     <p class="small muted" style="margin:8px 0 0">Studied today: <b>${dur(loggedToday) || '0m'}</b>${target ? ` of ${dur(target)} target` : ''}</p>
@@ -32,7 +31,7 @@ export function renderDashboard(host, refresh) {
 <div class="tiles">
   ${tile(s.total, 'Mistakes recorded')}
   ${tile(s.unresolved, 'Unresolved')}
-  ${tile(s.dueToday, 'Reviews due today', s.dueToday ? 'warn' : '')}
+  ${tile(s.dueToday, 'Reviews due now', s.dueToday ? 'warn' : '', 'Due today plus anything overdue — the same count as the Review queue')}
   ${tile(s.overdue, 'Overdue reviews', s.overdue ? 'bad' : '')}
   ${tile(s.repeated, 'Repeated ≥ 2×', s.repeated ? 'warn' : '', 'Recurrences in later tests + failed reviews, at least two in total')}
   ${tile(s.mastered, 'Mastered', s.mastered ? 'good' : '', 'Mastery needs repeated independent successes, not a click')}

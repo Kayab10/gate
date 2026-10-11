@@ -22,6 +22,7 @@ const SESSION_COOKIE = 'gate_session';
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest();
 const safeEqual = (a, b) => crypto.timingSafeEqual(sha(String(a)), sha(String(b)));
+const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return ''; } }; // a malformed cookie must not crash the request
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -48,13 +49,19 @@ export async function createHandler({
     const good = sign(uid, exp).split('.')[2];
     return sig.length === good.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good)) ? { uid: Number(uid), exp: Number(exp) } : null;
   };
-  const cookies = (req) => Object.fromEntries((req.headers.cookie || '').split(/;\s*/).filter(Boolean).map((c) => [c.slice(0, c.indexOf('=')), decodeURIComponent(c.slice(c.indexOf('=') + 1))]));
+  const cookies = (req) => Object.fromEntries((req.headers.cookie || '').split(/;\s*/).filter(Boolean).map((c) => [c.slice(0, c.indexOf('=')), safeDecode(c.slice(c.indexOf('=') + 1))]));
   const setSession = (req, res, uid) => {
     const secure = req.headers['x-forwarded-proto'] === 'https' || req.socket?.encrypted ? '; Secure' : '';
     const exp = Math.floor(Date.now() / 1000) + YEAR;
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${sign(uid, exp)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${YEAR}${secure}`);
   };
   const clearSession = (res) => res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+
+  // best-effort brake on password guessing (per server instance): 8 wrong passwords per email+IP in 10 minutes, then wait
+  const fails = new Map();
+  const failKey = (req, email) => `${String(email || '').trim().toLowerCase()}|${String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim()}`;
+  const tooMany = (k) => { const f = fails.get(k); return !!f && f.n >= 8 && Date.now() - f.t < 600_000; };
+  const noteFail = (k) => { const f = fails.get(k); fails.set(k, f && Date.now() - f.t < 600_000 ? { n: f.n + 1, t: f.t } : { n: 1, t: Date.now() }); if (fails.size > 5000) fails.clear(); };
 
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers });
@@ -158,8 +165,11 @@ export async function createHandler({
         }
         if (url.pathname === '/api/login' && req.method === 'POST') {
           const b = await readBody(req);
+          const fk = failKey(req, b.email);
+          if (tooMany(fk)) return send(res, 429, { error: 'Too many wrong attempts. Wait a few minutes and try again.' });
           const uid = await store.verifyUser(b.email, b.password);
           if (!uid) {
+            noteFail(fk);
             await sleep(800); // slows down password guessing
             return send(res, 401, { error: 'Wrong email or password' });
           }
@@ -202,7 +212,9 @@ export async function createHandler({
       const dbConstraint = ['23505', '23503', '23514', '23502', '22P02', '22003', '22007', '22008'].includes(e.code);
       const status = e.status || (dbConstraint ? 400 : 500);
       if (status === 500) console.error(e);
-      send(res, status, { error: status === 500 ? 'Server error — check the logs' : e.message, fields: e.errors });
+      // never pass raw database error text to the browser; app-level errors (validation, not found, …) are safe to show
+      const msg = status === 500 ? 'Server error — check the logs' : dbConstraint ? 'That value is not allowed (it conflicts with existing data).' : e.message;
+      send(res, status, { error: msg, fields: e.errors });
     }
   }
   return { handle, store };

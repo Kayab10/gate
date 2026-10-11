@@ -96,6 +96,8 @@ export function renderMistakes(host, refresh) {
   const draw = () => {
     const list = applyFilter(D.mistakes, F).sort(SORTS[sort][1]);
     const shown = list.slice(0, limit);
+    const visible = new Set(list.map((m) => m.id));
+    for (const id of [...selected]) if (!visible.has(id)) selected.delete(id); // never act on rows the filters hide
     const total = D.mistakes.filter((m) => !m.archived).length;
     const providers = [...new Set(D.mistakes.map((m) => m.provider).filter(Boolean))].sort();
     const saved = D.settings.savedFilters || [];
