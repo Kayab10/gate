@@ -87,6 +87,7 @@ window.addEventListener('hashchange', () => {
   refresh(true);
 });
 
+window.addEventListener('gate:stale', () => refresh());
 $('#streamBtn').addEventListener('click', async () => {
   try {
     const r = await api('GET', '/api/streams');

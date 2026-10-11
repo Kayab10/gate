@@ -106,7 +106,7 @@ export async function pgAdapter(connectionString) {
   const u = new URL(connectionString);
   const local = ['localhost', '127.0.0.1', '::1'].includes(u.hostname);
   u.searchParams.delete('sslmode'); // we set ssl explicitly below (Supabase's pooler cert chain isn't in Node's store)
-  const pool = new pg.Pool({ connectionString: u.toString(), max: 4, idleTimeoutMillis: 10_000, ssl: local ? false : { rejectUnauthorized: false } });
+  const pool = new pg.Pool({ connectionString: u.toString(), max: 4, idleTimeoutMillis: 60_000, ssl: local ? false : { rejectUnauthorized: false } });
   return {
     query: (sql, params) => pool.query(sql, params),
     async connect() {
@@ -156,31 +156,31 @@ export const BRANCHES = STREAMS.map((s) => ({ code: s.code, name: s.name }));
 
 /** Give a user their own copy of the default root causes. `q(sql, params)` runs inside the caller's transaction. */
 export async function seedCauses(q, uid) {
-  for (const [i, [name, description, guidance]] of CAUSES.entries()) {
-    await q('INSERT INTO causes (user_id, name, description, guidance, sort) VALUES ($1, $2, $3, $4, $5)', [uid, name, description, guidance, i]);
-  }
+  const vals = [];
+  const sql = CAUSES.map(([name, description, guidance], i) => (vals.push(uid, name, description, guidance, i), `($${vals.length - 4}, $${vals.length - 3}, $${vals.length - 2}, $${vals.length - 1}, $${vals.length})`)).join(',');
+  await q(`INSERT INTO causes (user_id, name, description, guidance, sort) VALUES ${sql}`, vals);
 }
 
-/** Copy a branch template (e.g. "ME") into the user's account as their own stream, subjects and topics. */
+/** Copy a branch template (e.g. "ME") into the user's account as their own stream, subjects and topics (3 queries, not hundreds). */
 export async function seedBranch(q, uid, code) {
   const tpl = STREAMS.find((s) => s.code === code);
   if (!tpl) throw Object.assign(new Error(`Unknown branch "${code}"`), { status: 400 });
   const sort = (await q('SELECT COALESCE(MAX(sort), 0) + 1 AS n FROM streams WHERE user_id = $1', [uid])).rows[0].n;
   const streamId = (await q('INSERT INTO streams (user_id, code, name, sort) VALUES ($1, $2, $3, $4) RETURNING id', [uid, tpl.code, tpl.name, sort])).rows[0].id;
-  const subjectIds = new Map();
-  const counts = new Map();
+  const subjects = new Map(); // name -> { section, topics[] }
   for (const [section, name, topics] of tpl.syllabus) {
-    let id = subjectIds.get(name);
-    if (!id) {
-      id = (await q('INSERT INTO subjects (user_id, stream_id, section, name, sort) VALUES ($1, $2, $3, $4, $5) RETURNING id', [uid, streamId, section, name, subjectIds.size])).rows[0].id;
-      subjectIds.set(name, id);
-    }
-    for (const t of topics) {
-      const j = counts.get(id) || 0;
-      counts.set(id, j + 1);
-      await q('INSERT INTO topics (user_id, subject_id, name, sort) VALUES ($1, $2, $3, $4)', [uid, id, t, j]);
-    }
+    if (!subjects.has(name)) subjects.set(name, { section, topics: [] });
+    subjects.get(name).topics.push(...topics);
   }
+  const sv = [];
+  const ssql = [...subjects].map(([name, s], i) => (sv.push(uid, streamId, s.section, name, i), `($${sv.length - 4}, $${sv.length - 3}, $${sv.length - 2}, $${sv.length - 1}, $${sv.length})`)).join(',');
+  const idByName = new Map((await q(`INSERT INTO subjects (user_id, stream_id, section, name, sort) VALUES ${ssql} RETURNING id, name`, sv)).rows.map((r) => [r.name, r.id]));
+  const tv = [];
+  const tsql = [];
+  for (const [name, s] of subjects) {
+    s.topics.forEach((t, j) => (tv.push(uid, idByName.get(name), t, j), tsql.push(`($${tv.length - 3}, $${tv.length - 2}, $${tv.length - 1}, $${tv.length})`)));
+  }
+  if (tsql.length) await q(`INSERT INTO topics (user_id, subject_id, name, sort) VALUES ${tsql.join(',')}`, tv);
   return streamId;
 }
 

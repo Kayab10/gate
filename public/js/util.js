@@ -20,7 +20,11 @@ export async function api(method, url, body) {
     res = await request(method, url, body);
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    // 404 on an item we are showing = the screen is out of date (changed in another tab/device or account): reload it
+    if (res.status === 404 && /not found/i.test(data.error || '') && D.loaded) setTimeout(() => window.dispatchEvent(new Event('gate:stale')), 0);
+    throw new Error(res.status === 404 && /not found/i.test(data.error || '') ? 'That item changed elsewhere — refreshed, please try again.' : data.error || `Request failed (${res.status})`);
+  }
   return data;
 }
 
@@ -73,7 +77,15 @@ export function showLogin() {
         btn.disabled = false;
       }
     });
-    request('GET', '/api/session').then((r) => r.json()).then((s) => (info = s.branches ? s : info)).catch(() => {}).finally(draw);
+    draw(); // show the form at once; sign-up details (branches, invite code) fill in when the server answers
+    request('GET', '/api/session').then((r) => r.json()).then((s) => {
+      if (!s.branches) return;
+      const keep = ['name', 'email', 'password'].map((n) => [n, o.querySelector(`[name=${n}]`)?.value || '']);
+      info = s;
+      draw();
+      for (const [n, v] of keep) { const el = o.querySelector(`[name=${n}]`); if (el && v) el.value = v; }
+      (o.querySelector('[name=password]')?.value ? o.querySelector('[name=password]') : o.querySelector('[name=email]')).focus();
+    }).catch(() => {});
   });
   return loginPromise;
 }
