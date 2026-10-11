@@ -220,7 +220,7 @@ test('db diagnosis: explains common Supabase/Vercel connection mistakes in plain
 });
 
 test('vercel function: /api/health and API calls report a clear reason when the database cannot be reached', async () => {
-  const mod = await import('../api/[...path].js');
+  const mod = await import('../api/index.js');
   const call = async (url) => {
     let status, body = '';
     await mod.default({ url, method: 'GET', headers: {} }, { writeHead: (s) => (status = s), end: (b) => (body += b) });

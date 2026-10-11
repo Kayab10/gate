@@ -62,7 +62,7 @@ Covers scheduling, priority, planner, analytics, API validation, bulk operations
 ## Layout
 
 ```
-api/[...path].js   Vercel serverless entry     src/       db (Postgres + migrations), store, validation, HTTP
+api/index.js          Vercel serverless entry (all /api/* rewritten here)     src/       db (Postgres + migrations), store, validation, HTTP
 public/            the app (no build step)     public/shared/  pure logic used by browser + server
 test/              node:test suites            scripts/   icons, demo-data, reset-password
 ```
