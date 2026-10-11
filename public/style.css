@@ -80,6 +80,8 @@ main.enter > div { animation: enter 260ms var(--ease) both; }
 @keyframes enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
 .page-head p { margin: 0; color: var(--muted); }
+.countdown { display: flex; align-items: baseline; gap: 8px; background: var(--accent-soft); color: var(--accent); border-radius: var(--r); padding: 8px 18px; } .countdown b { font-size: 2.4rem; font-weight: 700; line-height: 1; letter-spacing: -.03em; } .countdown span { font-size: 1rem; font-weight: 600; }
+.studied { margin: 10px 0 0; font-size: 1.05rem; } .studied b { color: var(--text); font-size: 1.35rem; }
 
 /* ---------- surfaces ---------- */
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 20px; margin-bottom: 16px; transition: border-color var(--t); }

@@ -22,10 +22,10 @@ export function renderDashboard(host, refresh) {
 
   const tile = (v, l, cls = '', tip = '') => `<div class="tile ${cls}" title="${esc(tip)}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
   root.innerHTML = `
-<div class="page-head"><div><h1>Dashboard</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}${exam ? ` · ${Math.max(0, diffDays(exam, D.today))} days to the exam` : ''}</p></div></div>
+<div class="page-head"><div><h1>Dashboard</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</p></div>${exam ? `<div class="countdown" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days left</span></div>` : ''}</div>
   <section class="card" style="margin-bottom:20px"><div class="row between"><h2 style="margin:0">Today’s schedule</h2><a href="#/schedule" class="small">Open schedule ›</a></div>
     ${todayTasks.length ? todayTasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)} ${t.minutes ? `<span class="muted small">${dur(t.minutes)}</span>` : ''}</span></div>`).join('') : '<p class="muted small" style="margin:8px 0 0">No tasks planned for today. Add some in the Schedule.</p>'}
-    <p class="small muted" style="margin:8px 0 0">Studied today: <b>${dur(loggedToday) || '0m'}</b>${target ? ` of ${dur(target)} target` : ''}</p>
+    <p class="studied muted">Studied today: <b>${dur(loggedToday) || '0m'}</b>${target ? ` of ${dur(target)} target` : ''}</p>
     ${target ? `<div class="prog" style="margin-top:4px"><div style="width:${Math.min(100, (loggedToday / target) * 100)}%"></div></div>` : ''}
   </section>
 <div class="tiles">
