@@ -1,6 +1,5 @@
 import { mount, D, esc, $, api, opts, toast, fail, confirmDialog, askText } from './util.js';
 import { DEFAULT_SRS } from '/shared/srs.js';
-import { todayStr } from '/shared/dates.js';
 import { DEFAULT_PRIORITY } from '/shared/priority.js';
 import { DEFAULT_PLANNER } from '/shared/planner.js';
 
@@ -68,10 +67,6 @@ ${D.subjects.map((sub) => {
   }).join('')}
 <form id="addSubject" class="row" style="margin-top:10px"><input name="name" placeholder="New subject name" required><input name="section" placeholder="Section (optional)"><button class="btn">Add subject</button></form></section>
 
-<details class="more" data-key="demo" style="margin-bottom:14px"${isOpen('demo')}><summary>Demo data (to try the app out)</summary>
-<p class="hint">Fills the branch you are studying (<b>${esc(D.stream.code)}</b>) with ${D.stream.code === 'ME' || D.stream.code === 'DA' ? 'about 20 sample mistakes with review history, mock tests, planner tasks, study time and syllabus ticks' : 'sample data'} so you can see every screen. Everything it adds is labelled “[Sample]” or tagged <code>sample</code>; removing it deletes only that and keeps what you entered yourself.</p>
-<div class="row" style="margin-bottom:8px"><button class="btn primary" id="demoLoad">Load demo data</button><button class="btn danger" id="demoRemove">Remove demo data</button></div></details>
-
 <section class="card"><h2>Your data</h2><p>Everything you record — mistakes, reviews, tests, schedule, settings and screenshots — is stored in your account, so it is the same on your phone and laptop, and nobody else can see it.</p><button class="btn" id="logout">Sign out</button></section>`;
 
   root.addEventListener('toggle', (e) => {
@@ -84,23 +79,6 @@ ${D.subjects.map((sub) => {
   const put = async (key, value, msg = 'Saved') => {
     try { await api('PUT', `/api/settings/${key}`, { value }); toast(msg); await refresh(); } catch (e) { fail(e); }
   };
-  $('#demoLoad', root)?.addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    e.target.textContent = 'Loading…';
-    try {
-      const r = await api('POST', '/api/demo', { today: todayStr() });
-      toast(r.already ? 'Demo data is already loaded.' : `Loaded ${r.mistakes} sample mistakes, ${r.tests} tests, and a planner, study log and checklist.`);
-      await refresh();
-    } catch (ex) { fail(ex); await refresh(); }
-  });
-  $('#demoRemove', root)?.addEventListener('click', async () => {
-    if (!(await confirmDialog('Remove all demo data? This deletes only the sample mistakes (tag “sample”), “[Sample]” tests and tasks, sample study time and sample syllabus ticks. Anything you entered yourself is kept.', { okLabel: 'Remove demo data' }))) return;
-    try {
-      const r = await api('DELETE', '/api/demo');
-      toast(`Removed ${r.mistakes} sample mistakes, ${r.tests} tests, ${r.tasks} tasks, ${r.log} study-log entries.`);
-      await refresh();
-    } catch (ex) { fail(ex); }
-  });
   $('#logout', root)?.addEventListener('click', async () => {
     await api('POST', '/api/logout');
     try { localStorage.removeItem('stream'); } catch { /* ignore */ }

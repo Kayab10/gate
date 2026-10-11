@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { initDb, BRANCHES } from './db.js';
 import { createStore } from './store.js';
 import { ValidationError } from './validate.js';
-import { loadDemo, removeDemo } from './demo.js';
 import { isDate } from '../public/shared/dates.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -128,8 +127,6 @@ export async function createHandler({
     ['PUT', /^\/api\/causes\/(\d+)$/, (b, m, c) => c.S.saveCause(+m[1], b)],
     ['DELETE', /^\/api\/causes\/(\d+)$/, (b, m, c) => c.S.deleteCause(+m[1])],
 
-    ['POST', /^\/api\/demo$/, (b, m, c) => loadDemo(c.S, c.stream, b.today)],
-    ['DELETE', /^\/api\/demo$/, (b, m, c) => removeDemo(c.S)],
 
     ['POST', /^\/api\/attachments$/, (b, m, c) => {
       const mm = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/.exec(b.data || '');

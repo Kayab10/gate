@@ -486,84 +486,6 @@ test('attachments (stored in the database): only images, served back; static ser
   await app.close();
 });
 
-test('demo data: loads on both branches, is idempotent, and removal keeps your own entries and other users untouched', async () => {
-  const { app, a, call, makeClient } = await boot(tmp()); // A = ME
-  const other = makeClient();
-  await other.signup('other@example.com', 'ME');
-  const otherBefore = await boots(other);
-  const b = await boots(a);
-
-  // an entry of A's own, made before loading the demo
-  const own = (await call('POST', '/api/mistakes', { subject_id: b.subjects[0].id, cause_primary: b.causes[0].id, question_text: 'my real question', tags: ['mine'] })).body;
-  await call('POST', '/api/tests', { name: 'My real mock', date: D(-1) });
-  await call('POST', '/api/tasks', { title: 'My real task', date: D(0) });
-
-  let r = await call('POST', '/api/demo', { today: D(0) });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.already, false);
-  assert.equal(r.body.mistakes, 19);
-  let s = await boots(a);
-  assert.equal(s.mistakes.length, 20); // 19 sample + 1 of A's own
-  assert.equal(s.mistakes.filter((m) => m.tags.includes('sample')).length, 19);
-  assert.ok(s.tests.some((t) => t.name.startsWith('[Sample]')));
-  assert.ok(s.tasks.some((t) => t.title.startsWith('[Sample]')));
-  assert.ok(s.studyLog.length > 15);
-  assert.ok(s.progress.length > 20);
-  const statuses = new Set(s.mistakes.map((m) => m.status));
-  assert.ok(statuses.size >= 3, `varied review states, got ${[...statuses]}`); // new / in progress / improving / mastered / reopened …
-  assert.ok(s.reviews.length > 10);
-  assert.ok(s.mistakes.some((m) => m.next_review < D(0) && m.status !== 'mastered')); // some overdue so the queue has content
-
-  // loading again changes nothing
-  r = await call('POST', '/api/demo', { today: D(0) });
-  assert.equal(r.body.already, true);
-  assert.equal((await boots(a)).mistakes.length, 20);
-
-  // another user never sees it
-  const otherAfter = await boots(other);
-  assert.deepEqual([otherAfter.mistakes.length, otherAfter.tests.length, otherAfter.tasks.length, otherAfter.studyLog.length], [0, 0, 0, 0]);
-  assert.equal(JSON.stringify(otherAfter.subjects), JSON.stringify(otherBefore.subjects));
-
-  // remove: only the demo goes
-  r = await call('DELETE', '/api/demo');
-  assert.equal(r.status, 200);
-  assert.equal(r.body.mistakes, 19);
-  s = await boots(a);
-  assert.deepEqual(s.mistakes.map((m) => m.question_text), ['my real question']);
-  assert.equal(s.mistakes[0].id, own.id);
-  assert.deepEqual(s.tests.map((t) => t.name), ['My real mock']);
-  assert.deepEqual(s.tasks.map((t) => t.title), ['My real task']);
-  assert.deepEqual([s.studyLog.length, s.progress.filter((p) => p.studied).length, s.reviews.length], [0, 0, 0]);
-  // removing when nothing is loaded is harmless, and it can be loaded again
-  assert.equal((await call('DELETE', '/api/demo')).body.mistakes, 0);
-  assert.equal((await call('POST', '/api/demo', { today: D(0) })).body.already, false);
-  await call('DELETE', '/api/demo');
-
-  // the DA branch has its own demo set
-  const da = (await call('POST', '/api/streams', { code: 'DA' })).body;
-  a.useStream(da.id);
-  r = await call('POST', '/api/demo', { today: D(0) });
-  assert.equal(r.status, 200);
-  assert.ok(r.body.mistakes >= 20);
-  const daState = await boots(a);
-  assert.ok(daState.mistakes.some((m) => /SVM|Bayes|Dijkstra/.test(m.question_text)));
-  a.useStream(me0(b));
-  assert.deepEqual((await boots(a)).mistakes.map((m) => m.question_text), ['my real question']); // ME untouched by DA demo
-  assert.equal((await call('DELETE', '/api/demo')).body.mistakes, r.body.mistakes); // remove finds it in the other branch too
-  await app.close();
-});
-function me0(b) {
-  return b.stream.id;
-}
-
-test('demo data requires being signed in', async () => {
-  const { app, makeClient } = await boot(tmp(), { noUser: true });
-  const c = makeClient();
-  assert.equal((await c.call('POST', '/api/demo', { today: D(0) })).status, 401);
-  assert.equal((await c.call('DELETE', '/api/demo')).status, 401);
-  await app.close();
-});
-
 test('a valid session cookie for an account that no longer exists is treated as signed out', async () => {
   const one = await boot(tmp());
   const cookie = one.getCookie();
@@ -636,3 +558,32 @@ test('regressions 2: breakdown scrub, topic importance inherits, bulk next-revie
   await app.close();
 });
 
+
+test('migration v3 removes leftover demo rows and keeps real ones', async () => {
+  const dir = tmp();
+  let ctx = await boot(dir);
+  const b = await boots({ call: ctx.call });
+  const sub = b.subjects[0].id, cause = b.causes[0].id;
+  const real = (await ctx.call('POST', '/api/mistakes', { subject_id: sub, cause_primary: cause, tags: ['sample'], question_text: 'mine' })).body; // tagged "sample" by me, no [Sample] test name
+  const demo = (await ctx.call('POST', '/api/mistakes', { subject_id: sub, cause_primary: cause, tags: ['sample'], test_name: '[Sample] Mock 1', question_text: 'demo' })).body;
+  await ctx.call('POST', '/api/tasks', { title: '[Sample] Study X', date: D(0) });
+  await ctx.call('POST', '/api/tasks', { title: 'Real task', date: D(0) });
+  await ctx.call('POST', '/api/log', { date: D(0), minutes: 30, note: 'sample' });
+  await ctx.call('POST', '/api/log', { date: D(0), minutes: 20, note: 'mine' });
+  await ctx.app.close();
+  // pretend the database is still at v2, then start the app again
+  const db = await pgliteAdapter(path.join(dir, 'pg'));
+  await db.query('DELETE FROM schema_migrations WHERE version = 3');
+  await db.close();
+  ctx = await boot(dir, { noUser: true });
+  const c = ctx.makeClient();
+  assert.equal((await c.call('POST', '/api/login', { email: 'a@example.com', password: PW })).status, 200);
+  const st = (await c.call('GET', '/api/streams')).body.streams[0].id;
+  c.useStream(st);
+  const s = (await c.call('GET', '/api/bootstrap')).body;
+  assert.deepEqual(s.mistakes.map((m) => m.id), [real.id]);
+  assert.ok(!s.mistakes.some((m) => m.id === demo.id));
+  assert.deepEqual(s.tasks.map((t) => t.title), ['Real task']);
+  assert.deepEqual(s.studyLog.map((l) => l.note), ['mine']);
+  await ctx.app.close();
+});

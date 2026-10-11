@@ -106,6 +106,14 @@ export const MIGRATIONS = [
   CREATE INDEX idx_topics_subject ON topics(subject_id);
   CREATE INDEX idx_reviews_user ON reviews(user_id);
   `,
+  // v3: the demo-data feature was removed; delete any sample rows it left behind (only rows that carry its markers)
+  `
+  DELETE FROM mistakes WHERE tags LIKE '%"sample"%' AND test_name LIKE '[Sample]%';
+  DELETE FROM tests WHERE name LIKE '[Sample]%';
+  DELETE FROM tasks WHERE title LIKE '[Sample]%';
+  DELETE FROM study_log WHERE note = 'sample';
+  DELETE FROM topic_progress WHERE notes = 'sample';
+  `,
 ];
 
 /* ---------------------------- adapters ---------------------------- */
