@@ -130,6 +130,10 @@ details.card > summary { list-style: none; } details.card > summary::-webkit-det
 .chip.sec input:checked + span { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
 .err { color: var(--bad); font-size: .85rem; margin: 6px 0 0; } .hint { color: var(--muted); font-size: .8rem; }
 
+.pomo-clock { font-size: clamp(3.4rem, 14vw, 5.5rem); font-weight: 700; letter-spacing: -.04em; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; margin: 6px 0; }
+.pomo[data-mode=short] .pomo-clock, .pomo[data-mode=long] .pomo-clock { color: var(--good); } .pomo[data-mode=short] .prog > div, .pomo[data-mode=long] .prog > div { background: var(--good); }
+.pomo .tabs { display: flex; } .pomo .tabs button { flex: 1; white-space: nowrap; }
+
 /* ---------- tables ---------- */
 table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); white-space: nowrap; background: var(--panel); position: sticky; top: 0; }

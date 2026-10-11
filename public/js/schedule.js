@@ -1,5 +1,6 @@
 // Schedule & Tracker: weekly planner, study-time log, syllabus progress tracker.
 import { mount, D, esc, $, api, opts, subjectOpts, subName, toast, fail, empty, dur, pct, topicsOf } from './util.js';
+import { renderPomodoro } from './pomodoro.js';
 import { addDays, weekStart, dayName, shortDate, diffDays } from '/shared/dates.js';
 
 let tab = 'planner';
@@ -122,6 +123,7 @@ function studyLog(host, refresh) {
   <div class="tile"><div class="v">${dur(sumRange(addDays(D.today, -29), D.today)) || '0m'}</div><div class="l">Last 30 days</div></div>
   <div class="tile"><div class="v">${streak}</div><div class="l">Day streak</div></div>
 </div>
+<div id="pomo"></div>
 <div class="grid g2">
 <section class="card"><h2>Log study time</h2>
 <form id="lf" class="fgrid" autocomplete="off">
@@ -137,6 +139,7 @@ function studyLog(host, refresh) {
 </div>
 <section class="card"><h2>Consistency (last 16 weeks)</h2><div class="cal" aria-label="Study consistency calendar">${cells.join('')}</div><p class="hint">Darker = closer to your daily target${target ? '' : ' (no target set — using 4 h; set one in Settings)'}. Columns are weeks, rows Monday → Sunday.</p></section>
 <section class="card"><h2>Recent entries</h2>${log.length ? `<div class="tablewrap"><table><tbody>${[...log].reverse().slice(0, 25).map((l) => `<tr><td class="nowrap">${esc(l.date)}</td><td>${esc(l.subject_id ? subName(l.subject_id) : '—')}</td><td>${esc(l.activity || '')}</td><td class="num">${dur(l.minutes)}</td><td class="muted">${esc(l.note || '')}</td><td class="right"><button class="btn ghost small" data-dl="${l.id}" aria-label="Delete entry">✕</button></td></tr>`).join('')}</tbody></table></div>` : empty('No study time logged yet.')}</section>`;
+  renderPomodoro($('#pomo', body), ACTIVITIES);
   $('#lf', body).addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target.elements;
