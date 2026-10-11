@@ -1,4 +1,4 @@
-import { mount, D, esc, $, $$, api, opts, toast, fail, confirmDialog, askText, subjectOpts } from './util.js';
+import { mount, D, esc, $, api, opts, toast, fail, confirmDialog, askText } from './util.js';
 import { DEFAULT_SRS } from '/shared/srs.js';
 import { todayStr } from '/shared/dates.js';
 import { DEFAULT_PRIORITY } from '/shared/priority.js';
@@ -54,15 +54,15 @@ ${D.causes.map((c) => `<details class="more" data-key="cause-${c.id}" data-kind=
 <form id="addCause" class="row" style="margin:12px 0 4px"><input name="name" placeholder="New cause name" required><button class="btn">Add cause</button></form></details>
 
 <section class="card"><h2>Syllabus: subjects, topics & subtopics</h2>
-<p class="hint">Importance (1–5) is <b>your</b> judgement and feeds the priority score; 3 is neutral. Deleting a topic keeps its mistakes (they just lose the topic).</p>
+<p class="hint">Importance (1–5) is <b>your</b> judgement and feeds the priority score; 3 is neutral; a topic set to “as subject” uses its subject’s rating. Deleting a topic keeps its mistakes (they just lose the topic).</p>
 ${D.subjects.map((sub) => {
     const tops = D.topics.filter((t) => t.subject_id === sub.id && !t.parent_id);
     return `<details class="more" data-subj="${sub.id}"${openSubj.has(sub.id) ? ' open' : ''}><summary>${esc(sub.name)} <span class="muted small">(${tops.length} topics)</span></summary>
     <div class="row" data-kind="subject" data-id="${sub.id}" style="margin:8px 0"><input data-f="name" value="${esc(sub.name)}" aria-label="Subject name" style="flex:1;min-width:160px"><input data-f="section" value="${esc(sub.section || '')}" placeholder="Section" aria-label="Section" style="width:200px"><label class="row gap-s"><span class="muted small">Importance</span><select data-f="importance">${opts([1, 2, 3, 4, 5].map((n) => [n, n]), sub.importance)}</select></label><button class="btn danger small" data-del-subject="${sub.id}">Delete subject</button></div>
     ${tops.map((t) => {
       const subs = D.topics.filter((x) => x.parent_id === t.id);
-      return `<div data-kind="topic" data-id="${t.id}" class="row" style="margin:3px 0"><input data-f="name" value="${esc(t.name)}" style="flex:1;min-width:200px" aria-label="Topic name"><select data-f="importance" aria-label="Importance">${opts([1, 2, 3, 4, 5].map((n) => [n, n]), t.importance)}</select><button class="btn small" data-add-sub="${t.id}" data-subj-id="${sub.id}">＋ subtopic</button><button class="btn small danger" data-del-topic="${t.id}" aria-label="Delete topic">✕</button></div>
-      ${subs.map((x) => `<div data-kind="topic" data-id="${x.id}" class="row" style="margin:3px 0 3px 28px"><input data-f="name" value="${esc(x.name)}" style="flex:1;min-width:180px" aria-label="Subtopic name"><select data-f="importance" aria-label="Importance">${opts([1, 2, 3, 4, 5].map((n) => [n, n]), x.importance)}</select><button class="btn small danger" data-del-topic="${x.id}" aria-label="Delete subtopic">✕</button></div>`).join('')}`;
+      return `<div data-kind="topic" data-id="${t.id}" class="row" style="margin:3px 0"><input data-f="name" value="${esc(t.name)}" style="flex:1;min-width:200px" aria-label="Topic name"><select data-f="importance" aria-label="Importance">${opts([['', 'as subject'], ...[1, 2, 3, 4, 5].map((n) => [n, n])], t.importance ?? '')}</select><button class="btn small" data-add-sub="${t.id}" data-subj-id="${sub.id}">＋ subtopic</button><button class="btn small danger" data-del-topic="${t.id}" aria-label="Delete topic">✕</button></div>
+      ${subs.map((x) => `<div data-kind="topic" data-id="${x.id}" class="row" style="margin:3px 0 3px 28px"><input data-f="name" value="${esc(x.name)}" style="flex:1;min-width:180px" aria-label="Subtopic name"><select data-f="importance" aria-label="Importance">${opts([['', 'as subject'], ...[1, 2, 3, 4, 5].map((n) => [n, n])], x.importance ?? '')}</select><button class="btn small danger" data-del-topic="${x.id}" aria-label="Delete subtopic">✕</button></div>`).join('')}`;
     }).join('')}
     <form class="row addTopic" data-subj-id="${sub.id}" style="margin-top:8px"><input name="name" placeholder="New topic in ${esc(sub.name)}" required style="flex:1"><button class="btn small">Add topic</button></form></details>`;
   }).join('')}
@@ -131,7 +131,7 @@ ${D.subjects.map((sub) => {
     if (!row || !e.target.dataset.f) return;
     const path = { cause: 'causes', subject: 'subjects', topic: 'topics' }[row.dataset.kind];
     let v = e.target.value;
-    if (e.target.dataset.f === 'importance') v = Number(v);
+    if (e.target.dataset.f === 'importance') v = v === '' ? (row.dataset.kind === 'topic' ? null : 3) : Number(v);
     try { await api('PUT', `/api/${path}/${row.dataset.id}`, { [e.target.dataset.f]: v }); toast('Saved'); await refresh(); } catch (ex) { fail(ex); }
   });
   root.addEventListener('click', async (e) => {
@@ -159,5 +159,4 @@ ${D.subjects.map((sub) => {
       }
     } catch (ex) { fail(ex); }
   });
-  void $; void $$; void subjectOpts;
 }

@@ -1,6 +1,6 @@
-import { mount, D, esc, $, $$, api, subName, topName, causeName, toast, fail, empty, attUrl } from './util.js';
+import { mount, D, esc, $, api, subName, topName, causeName, toast, fail, empty, attUrl } from './util.js';
 import { previewOutcomes, OUTCOMES, REVIEW_OUTCOMES } from '/shared/srs.js';
-import { diffDays, addDays } from '/shared/dates.js';
+import { diffDays } from '/shared/dates.js';
 import { statusBadge, dueLabel, snippet, showMistake } from './mistakes.js';
 
 let currentId = null;
@@ -136,5 +136,4 @@ export function renderReview(host, refresh) {
 
 export const resetReviewDate = () => (reviewDate = null);
 export const focusReview = (id) => ((currentId = id), (revealed = false));
-void addDays;
-void $$;
+

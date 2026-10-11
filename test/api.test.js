@@ -607,3 +607,32 @@ test('regressions: partial test edits, subject change clears topic, cause delete
   assert.equal((await call('PUT', '/api/settings/general', { value: null })).status, 400);
   await app.close();
 });
+
+test('regressions 2: breakdown scrub, topic importance inherits, bulk next-review, X-Today, attachment prune, many-mistake recompute', async () => {
+  const { app, call } = await boot(tmp());
+  const b = await boots({ call });
+  const [s1, s2] = b.subjects;
+  const topic = b.topics.find((x) => x.subject_id === s1.id && !x.parent_id);
+  assert.equal(topic.importance, null); // seeded topics inherit their subject's importance
+  assert.equal((await call('PUT', `/api/topics/${topic.id}`, { importance: 3 })).body.importance, 3); // an explicit 3 is allowed
+  const cause = b.causes[0].id;
+  // breakdown rows disappear with the subject / topic they point at
+  const t = (await call('POST', '/api/tests', { name: 'T', date: D(-1), breakdown: [{ subject_id: s1.id, correct: 1 }, { subject_id: s2.id, topic_id: b.topics.find((x) => x.subject_id === s2.id).id, correct: 2 }] })).body;
+  assert.equal((await call('DELETE', `/api/subjects/${s1.id}`)).status, 200);
+  assert.deepEqual((await boots({ call })).tests.find((x) => x.id === t.id).breakdown.map((r) => r.subject_id), [s2.id]);
+  // X-Today decides default dates
+  const m = (await call('POST', '/api/mistakes', { subject_id: s2.id, cause_primary: cause }, { 'X-Today': D(-5) })).body;
+  assert.equal(m.date_encountered, D(-5));
+  // bulk: set-based update + recompute for a manual next-review date
+  const ids = [m.id];
+  for (let i = 0; i < 5; i++) ids.push((await call('POST', '/api/mistakes', { subject_id: s2.id, cause_primary: cause, date_encountered: D(-2) })).body.id);
+  assert.equal((await call('POST', '/api/mistakes/bulk', { ids, action: 'set_next_review', value: D(30) })).body.count, 6);
+  assert.ok((await boots({ call })).mistakes.every((x) => x.next_review === D(30)));
+  assert.equal((await call('POST', '/api/mistakes/bulk', { ids, action: 'set_severity', value: 4 })).status, 200);
+  assert.equal((await call('POST', '/api/mistakes/bulk', { ids, action: 'set_cause' })).status, 400);
+  // changing the schedule settings re-derives every mistake in one pass
+  assert.equal((await call('PUT', '/api/settings/srs', { value: { intervals: [2, 4], failInterval: 1, masteryStreak: 3, maintenanceDays: 30 } })).status, 200);
+  assert.ok((await boots({ call })).mistakes.every((x) => x.next_review === D(30))); // overrides survive
+  await app.close();
+});
+

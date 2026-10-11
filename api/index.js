@@ -47,11 +47,13 @@ export default async function handler(req, res) {
     if (new URL(req.url, 'http://x').pathname === '/api/health') return await health(res);
     const bad = checkUrl(process.env.DATABASE_URL || '');
     if (bad) return json(res, 503, { error: `${bad.message} ${bad.hint}` });
-    ready ??= pgAdapter(process.env.DATABASE_URL).then((db) => createHandler({ db }));
+    ready ??= pgAdapter(process.env.DATABASE_URL).then(async (db) => ({ db, ...(await createHandler({ db })) }));
     const { handle } = await ready;
     await handle(req, res);
   } catch (e) {
+    const old = ready;
     ready = null; // let the next request retry the connection/migration
+    old?.then((r) => r.db.close()).catch(() => {}); // and do not leak the old pool
     console.error(e);
     const why = explainDbError(e, process.env.DATABASE_URL || '');
     json(res, 500, { error: `Cannot reach the database: ${why.message} ${why.hint} (Open /api/health on this site for a step-by-step check.)` });

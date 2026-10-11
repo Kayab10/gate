@@ -95,6 +95,17 @@ export const MIGRATIONS = [
   CREATE TABLE attachments (
     name TEXT PRIMARY KEY, ${OWNER}, mime TEXT NOT NULL, data BYTEA NOT NULL, created_at TEXT NOT NULL);
   `,
+  // v2: topic importance becomes optional (NULL = use the subject's), plus indexes for the per-branch lookups
+  `
+  ALTER TABLE topics ALTER COLUMN importance DROP NOT NULL, ALTER COLUMN importance DROP DEFAULT;
+  UPDATE topics SET importance = NULL WHERE importance = 3;
+  CREATE INDEX idx_tasks_stream ON tasks(user_id, stream_id);
+  CREATE INDEX idx_tests_stream ON tests(user_id, stream_id);
+  CREATE INDEX idx_log_stream ON study_log(user_id, stream_id);
+  CREATE INDEX idx_subjects_stream ON subjects(user_id, stream_id);
+  CREATE INDEX idx_topics_subject ON topics(subject_id);
+  CREATE INDEX idx_reviews_user ON reviews(user_id);
+  `,
 ];
 
 /* ---------------------------- adapters ---------------------------- */

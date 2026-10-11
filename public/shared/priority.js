@@ -25,9 +25,9 @@ export function normalizePriority(cfg) {
   return c;
 }
 
-/** effective importance: topic setting if changed from the neutral 3, else the subject's */
+/** effective importance: the topic's own rating if you set one (any of 1-5, including 3), else the subject's */
 export function effectiveImportance(topic, subject) {
-  if (topic && topic.importance && topic.importance !== 3) return topic.importance;
+  if (topic && topic.importance) return topic.importance;
   return subject?.importance || 3;
 }
 
@@ -40,7 +40,7 @@ export function priorityScore(m, ctx, cfgIn) {
   };
   add('recurrence', `Recurred ${m.recurrence_count}×`, (m.recurrence_count || 0) * cfg.recurrence);
   add('failedReview', `${m.fail_count} failed review(s)`, (m.fail_count || 0) * cfg.failedReview);
-  add('severity', `Severity ${m.severity || 3}`, (m.severity || 3) * cfg.severity);
+  add('severity', m.severity ? `Severity ${m.severity}` : 'Severity not set (counted as 3)', (m.severity || 3) * cfg.severity);
   add('marksLost', `${m.marks_lost || 0} mark(s) lost`, (m.marks_lost || 0) * cfg.marksLost);
   if (m.status !== 'mastered' && m.next_review < today) {
     const d = Math.min(diffDays(today, m.next_review), cfg.overdueCap);

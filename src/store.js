@@ -189,24 +189,48 @@ export function createStore(db) {
     }
 
     /* ---------- schedule state ---------- */
-    async function recompute(id, srsCfg) {
-      const m = await one('SELECT id, date_encountered, next_review_override FROM mistakes WHERE id = ? AND user_id = ?', id, uid);
-      if (!m) return;
-      const events = await q('SELECT id, date, outcome FROM reviews WHERE mistake_id = ? AND user_id = ?', id, uid);
-      const s = replay(m.date_encountered, events, srsCfg ?? (await getSettings()).srs);
-      if (m.next_review_override) s.next_review = m.next_review_override;
+    /** Re-derive schedule state for many mistakes at once: 2 reads and 1 write, however many there are. */
+    async function recomputeMany(ids, srsCfg) {
+      if (!ids.length) return;
+      const srs = srsCfg ?? (await getSettings()).srs;
+      const ms = await q('SELECT id, date_encountered, next_review_override FROM mistakes WHERE user_id = ? AND id = ANY(?::int[])', uid, ids);
+      const byMistake = new Map();
+      for (const e of await q('SELECT mistake_id, id, date, outcome FROM reviews WHERE user_id = ? AND mistake_id = ANY(?::int[])', uid, ids)) {
+        (byMistake.get(e.mistake_id) || byMistake.set(e.mistake_id, []).get(e.mistake_id)).push(e);
+      }
+      const rows = ms.map((m) => {
+        const st = replay(m.date_encountered, byMistake.get(m.id) || [], srs);
+        if (m.next_review_override) st.next_review = m.next_review_override;
+        return { id: m.id, ...st };
+      });
+      if (!rows.length) return;
+      const cols = ['id', 'status', 'stage', 'streak', 'fail_count', 'recurrence_count', 'reopen_count', 'review_count', 'success_count', 'last_review', 'last_success', 'mastered_at', 'next_review'];
+      const types = ['int', 'text', 'int', 'int', 'int', 'int', 'int', 'int', 'int', 'text', 'text', 'text', 'text'];
       await run(
-        `UPDATE mistakes SET status=?, stage=?, streak=?, fail_count=?, recurrence_count=?, reopen_count=?, review_count=?, success_count=?,
-         last_review=?, last_success=?, mastered_at=?, next_review=?, updated_at=? WHERE id=? AND user_id=?`,
-        s.status, s.stage, s.streak, s.fail_count, s.recurrence_count, s.reopen_count, s.review_count, s.success_count,
-        s.last_review, s.last_success, s.mastered_at, s.next_review, now(), id, uid,
+        `UPDATE mistakes m SET status=u.status, stage=u.stage, streak=u.streak, fail_count=u.fail_count, recurrence_count=u.recurrence_count, reopen_count=u.reopen_count,
+           review_count=u.review_count, success_count=u.success_count, last_review=u.last_review, last_success=u.last_success, mastered_at=u.mastered_at, next_review=u.next_review, updated_at=?
+         FROM unnest(${types.map((t) => `?::${t}[]`).join(', ')}) AS u(${cols.join(', ')}) WHERE m.id = u.id AND m.user_id = ?`,
+        now(), ...cols.map((c) => rows.map((r) => r[c] ?? null)), uid,
       );
     }
+    const recompute = (id, srsCfg) => recomputeMany([id], srsCfg);
     async function recomputeAll() {
-      await tx(async () => {
-        const srs = (await getSettings()).srs;
-        for (const r of await q('SELECT id FROM mistakes WHERE user_id = ?', uid)) await recompute(r.id, srs);
-      });
+      await tx(async () => recomputeMany((await q('SELECT id FROM mistakes WHERE user_id = ?', uid)).map((r) => r.id)));
+    }
+
+    /** Screenshots no mistake uses any more (uploaded more than a day ago, so a form being filled in is never affected). */
+    async function pruneAttachments() {
+      const cutoff = new Date(Date.now() - 24 * 3600e3).toISOString();
+      await run('DELETE FROM attachments WHERE user_id = ? AND created_at < ? AND name NOT IN (SELECT attachment FROM mistakes WHERE user_id = ? AND attachment IS NOT NULL)', uid, cutoff, uid);
+    }
+    /** Remove references to deleted subjects/topics from the per-test breakdown JSON. */
+    async function scrubBreakdowns(fix) {
+      for (const r of await q("SELECT id, breakdown FROM tests WHERE user_id = ? AND breakdown <> '[]'", uid)) {
+        let cur;
+        try { cur = JSON.parse(r.breakdown); } catch { continue; }
+        const next = fix(cur);
+        if (JSON.stringify(next) !== JSON.stringify(cur)) await run('UPDATE tests SET breakdown = ? WHERE id = ? AND user_id = ?', JSON.stringify(next), r.id, uid);
+      }
     }
 
     /* ---------- reference checks (every referenced row must be this user's) ---------- */
@@ -238,7 +262,7 @@ export function createStore(db) {
       return r;
     };
 
-    async function createMistake(input, today = todayStr()) {
+    async function createMistake(input, today = todayStr()) { // `today` = the browser's local date (X-Today header)
       const v = validate(MISTAKE_SPEC, input);
       v.date_encountered ||= today;
       v.causes_secondary = (v.causes_secondary || []).filter((c) => c !== v.cause_primary);
@@ -282,6 +306,7 @@ export function createStore(db) {
           await run(`UPDATE mistakes SET ${cols.map((c) => `${c}=?`).join(',')}, updated_at=? WHERE id=? AND user_id=?`, ...cols.map((c) => row[c]), now(), id, uid);
           await recompute(id);
         });
+        if ('attachment' in v) await pruneAttachments();
       }
       return getMistake(id);
     }
@@ -294,20 +319,27 @@ export function createStore(db) {
 
     async function deleteMistake(id) {
       if (!(await run('DELETE FROM mistakes WHERE id=? AND user_id=?', id, uid)).changes) throw notFound('Mistake');
+      await pruneAttachments();
       return { ok: true };
     }
 
-    async function duplicateMistake(id, date) {
+    async function duplicateMistake(id, date, today = todayStr()) {
       const m = await getMistake(id);
       const copy = {};
       for (const c of MCOLS) if (m[c] !== undefined && c !== 'archived' && c !== 'next_review_override') copy[c] = m[c];
-      copy.date_encountered = isDate(date) ? date : todayStr();
+      copy.date_encountered = isDate(date) ? date : today;
       return createMistake(copy);
     }
 
     async function bulk({ ids, action, value }) {
       if (!Array.isArray(ids) || !ids.length) throw bad('ids', 'select at least one mistake');
-      ids = ids.map(Number);
+      ids = [...new Set(ids.map(Number))];
+      if (ids.some((n) => !Number.isInteger(n))) throw bad('ids', 'must be a list of mistake ids');
+      if (action === 'delete') {
+        const r = await run('DELETE FROM mistakes WHERE user_id = ? AND id = ANY(?::int[])', uid, ids);
+        await pruneAttachments();
+        return { ok: true, count: r.changes };
+      }
       const patch = {
         archive: { archived: 1 },
         unarchive: { archived: 0 },
@@ -316,37 +348,33 @@ export function createStore(db) {
         set_subject: { subject_id: value, topic_id: null, subtopic_id: null },
         set_next_review: { next_review_override: value },
       }[action];
-      if (action === 'delete') {
-        let count = 0;
-        await tx(async () => {
-          for (const id of ids) count += (await run('DELETE FROM mistakes WHERE id=? AND user_id=?', id, uid)).changes;
-        });
-        return { ok: true, count };
-      }
+      if (action !== 'add_tag' && !patch) throw bad('action', 'unknown bulk action');
+      const own = (await q('SELECT id FROM mistakes WHERE user_id = ? AND id = ANY(?::int[])', uid, ids)).length;
+      if (own !== ids.length) throw notFound('Mistake');
       if (action === 'add_tag') {
         const tag = String(value || '').trim();
         if (!tag) throw bad('value', 'tag required');
-        await tx(async () => {
-          for (const id of ids) {
-            const m = await getMistake(id);
-            if (!m.tags.includes(tag)) await updateMistake(id, { tags: [...m.tags, tag] });
-          }
-        });
+        const one = JSON.stringify([tag]);
+        await run('UPDATE mistakes SET tags = (tags::jsonb || ?::jsonb)::text, updated_at = ? WHERE user_id = ? AND id = ANY(?::int[]) AND NOT (tags::jsonb @> ?::jsonb)', one, now(), uid, ids, one);
         return { ok: true, count: ids.length };
       }
-      if (!patch) throw bad('action', 'unknown bulk action');
+      const v = validate(MISTAKE_SPEC, patch, { partial: true });
+      const cols = MCOLS.filter((c) => v[c] !== undefined);
+      if (!cols.length) throw bad('value', 'a value is required for this action');
+      await checkRefs(v);
       await tx(async () => {
-        for (const id of ids) await updateMistake(id, patch);
+        await run(`UPDATE mistakes SET ${cols.map((c) => `${c}=?`).join(',')}, updated_at=? WHERE user_id=? AND id = ANY(?::int[])`, ...cols.map((c) => v[c]), now(), uid, ids);
+        if (cols.includes('next_review_override')) await recomputeMany(ids);
       });
       return { ok: true, count: ids.length };
     }
 
     /* ---------- reviews ---------- */
-    async function addReview(mistakeId, { outcome, date, note, time_spent_sec }) {
+    async function addReview(mistakeId, { outcome, date, note, time_spent_sec }, today = todayStr()) {
       const m = await one('SELECT date_encountered FROM mistakes WHERE id=? AND user_id=?', mistakeId, uid);
       if (!m) throw notFound('Mistake');
       if (!REVIEW_OUTCOMES.includes(outcome) && outcome !== 'recurred') throw bad('outcome', `must be one of ${[...REVIEW_OUTCOMES, 'recurred'].join(', ')}`);
-      date = date || todayStr();
+      date = date || today;
       if (!isDate(date)) throw bad('date', 'must be a date YYYY-MM-DD');
       if (date < m.date_encountered) throw bad('date', 'review cannot be before the date the mistake was encountered');
       await tx(async () => {
@@ -494,6 +522,7 @@ export function createStore(db) {
     async function deleteSubject(id) {
       if (await exists('SELECT 1 x FROM mistakes WHERE subject_id=? AND user_id=?', id, uid)) throw bad('subject', 'has recorded mistakes; reassign or delete them first');
       if (!(await run('DELETE FROM subjects WHERE id=? AND user_id=?', id, uid)).changes) throw notFound('Subject');
+      await scrubBreakdowns((b) => b.filter((x) => x.subject_id !== id));
       return { ok: true };
     }
     async function saveTopic(id, input) {
@@ -513,14 +542,16 @@ export function createStore(db) {
       } else {
         if (!(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
         const sort = (await one('SELECT COALESCE(MAX(sort),0)+1 AS n FROM topics WHERE subject_id=? AND user_id=?', v.subject_id, uid)).n;
-        id = await ins('INSERT INTO topics (user_id, subject_id, parent_id, name, importance, sort) VALUES (?,?,?,?,?,?)', uid, v.subject_id, v.parent_id ?? null, v.name, v.importance ?? 3, sort);
+        id = await ins('INSERT INTO topics (user_id, subject_id, parent_id, name, importance, sort) VALUES (?,?,?,?,?,?)', uid, v.subject_id, v.parent_id ?? null, v.name, v.importance ?? null, sort);
       }
       return strip(await one('SELECT * FROM topics WHERE id=? AND user_id=?', id, uid));
     }
     async function deleteTopic(id) {
       const used = (await one('SELECT COUNT(*)::int AS n FROM mistakes WHERE (topic_id=? OR subtopic_id=?) AND user_id=?', id, id, uid)).n;
       // mistakes keep existing (topic_id becomes NULL via ON DELETE SET NULL); the caller is told how many were detached
+      const gone = new Set((await q('SELECT id FROM topics WHERE (id=? OR parent_id=?) AND user_id=?', id, id, uid)).map((r) => r.id)); // the topic and its subtopics
       if (!(await run('DELETE FROM topics WHERE id=? AND user_id=?', id, uid)).changes) throw notFound('Topic');
+      await scrubBreakdowns((b) => b.map((x) => (gone.has(x.topic_id) ? (({ topic_id, ...rest }) => rest)(x) : x)));
       return { ok: true, detached: used };
     }
     async function saveCause(id, input) {

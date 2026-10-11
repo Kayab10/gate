@@ -1,4 +1,4 @@
-import { D, api, load, $, esc, toast, fail, modalOpen, closeAllModals, mount, pickStream } from './util.js';
+import { D, api, load, $, esc, fail, modalOpen, closeAllModals, mount, pickStream } from './util.js';
 import { openMistakeForm, mistakeFormHtml, bindMistakeForm } from './form.js';
 import { renderDashboard } from './dashboard.js';
 import { renderMistakes } from './mistakes.js';
@@ -66,7 +66,6 @@ export async function refresh(reload = true) {
     cleanup?.();
     const [name, , fn] = current();
     cleanup = fn(main, refresh) || null;
-    void name;
     window.scrollTo(0, y);
   } catch (e) {
     fail(e);
@@ -106,10 +105,13 @@ document.addEventListener('keydown', (e) => {
     openMistakeForm({ onSaved: () => refresh() });
   }
 });
+const themeMeta = () => document.querySelector('meta[name=theme-color]')?.setAttribute('content', document.documentElement.dataset.theme === 'light' ? '#eeeff3' : '#000000');
+themeMeta();
 $('#themeBtn').addEventListener('click', () => {
   const dark = document.documentElement.dataset.theme !== 'light';
   const t = dark ? 'light' : 'dark';
   document.documentElement.dataset.theme = t;
+  themeMeta();
   try { localStorage.setItem('theme', t); } catch {}
 });
 
@@ -160,4 +162,4 @@ lastDay = new Date().toDateString();
 animateIn();
 refresh().catch(() => {});
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-void esc; void toast;
+

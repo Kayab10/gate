@@ -99,8 +99,6 @@ export function renderMistakes(host, refresh) {
     const visible = new Set(list.map((m) => m.id));
     for (const id of [...selected]) if (!visible.has(id)) selected.delete(id); // never act on rows the filters hide
     const total = D.mistakes.filter((m) => !m.archived).length;
-    const providers = [...new Set(D.mistakes.map((m) => m.provider).filter(Boolean))].sort();
-    const saved = D.settings.savedFilters || [];
     $('#mlist', root).innerHTML = !total
       ? empty('No mistakes recorded yet. Press <b>N</b> or use “Quick add” to log your first one.')
       : !list.length
@@ -119,7 +117,6 @@ export function renderMistakes(host, refresh) {
       draw();
     });
     $('#more', root)?.addEventListener('click', () => ((limit += 200), draw()));
-    void providers; void saved;
   };
 
   const f = F;

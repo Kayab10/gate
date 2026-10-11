@@ -8,7 +8,7 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 async function request(method, url, body) {
   try {
-    return await fetch(url, { method, headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(getStream() ? { 'X-Stream': getStream() } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
+    return await fetch(url, { method, headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), 'X-Today': todayStr(), ...(getStream() ? { 'X-Stream': getStream() } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch {
     throw new Error('Cannot reach the server. Check your internet connection.');
   }
@@ -47,7 +47,7 @@ export function showLogin() {
           ${up ? '<input name="name" placeholder="Your name (optional)" autocomplete="name" style="width:100%">' : ''}
           <input name="email" type="email" placeholder="Email" autocomplete="username" required style="width:100%">
           <input name="password" type="password" placeholder="${up ? 'Password (8+ characters)' : 'Password'}" autocomplete="${up ? 'new-password' : 'current-password'}" required minlength="${up ? 8 : 1}" style="width:100%">
-          ${up ? `<fieldset><legend>Which paper are you preparing for?</legend><div class="chips">${info.branches.map((b, i) => `<label class="chip"><input type="radio" name="branch" value="${esc(b.code)}"${i === 0 ? ' checked' : ''}><span>${esc(b.name)} (${esc(b.code)})</span></label>`).join('')}</div></fieldset>` : ''}
+          ${up ? `<fieldset><legend>Which branch are you preparing for?</legend><div class="chips">${info.branches.map((b, i) => `<label class="chip"><input type="radio" name="branch" value="${esc(b.code)}"${i === 0 ? ' checked' : ''}><span>${esc(b.name)} (${esc(b.code)})</span></label>`).join('')}</div></fieldset>` : ''}
           ${up && info.inviteRequired ? '<input name="invite" placeholder="Invite code" required style="width:100%">' : ''}
         </div>
         <p class="err" data-err></p><button class="btn primary wide">${up ? 'Create account' : 'Sign in'}</button></form>`;
@@ -68,8 +68,8 @@ export function showLogin() {
           : { email: f.email.value, password: f.password.value };
         const r = await request('POST', mode === 'up' ? '/api/signup' : '/api/login', body);
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Something went wrong');
-        try { localStorage.removeItem('stream'); } catch { /* ignore */ }
-        o.remove();
+        o.remove(); // a saved branch that belongs to another account is rejected by the server and the picker shows
+
         loginPromise = null;
         resolve();
       } catch (ex) {
@@ -254,7 +254,7 @@ export function mount(host) {
 }
 
 /* ---------- misc ---------- */
-/** Downscale big screenshots before upload (phones take multi-MB photos; the server accepts up to ~3 MB). */
+/** Downscale big screenshots before upload (phones take multi-MB photos; the server accepts up to 2.5 MB). */
 export async function shrinkImage(file, max = 1600, quality = 0.85) {
   if (file.type === 'image/gif' || !self.createImageBitmap) return fileToDataUrl(file);
   const bmp = await createImageBitmap(file);

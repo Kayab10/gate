@@ -1,4 +1,4 @@
-import { mount, D, esc, $, subName, topName, pct, num, mins, empty } from './util.js';
+import { mount, D, esc, $, pct, num, mins, empty } from './util.js';
 import { bySubject, causeStats, weekly, masteryProgression, subjectWeekly, testStats, repeatCount } from '/shared/analytics.js';
 import { isUnresolved } from '/shared/srs.js';
 import { lineChart, barList, sparkBars, COLORS } from './charts.js';
@@ -57,7 +57,6 @@ ${weeks.length < 2 ? empty('Trends need records from at least two different week
 <section class="card"><h3>Mock-test performance</h3>${mockTable()}</section>`;
 
   $('#focus', root).addEventListener('change', (e) => ((focus = e.target.value), renderAnalytics(host)));
-  void subName; void topName;
 }
 
 function mockTable() {

@@ -1,5 +1,5 @@
 // Schedule & Tracker: weekly planner, study-time log, syllabus progress tracker.
-import { mount, D, esc, $, $$, api, opts, subjectOpts, subName, topName, toast, fail, confirmDialog, empty, dur, pct, topicsOf } from './util.js';
+import { mount, D, esc, $, api, opts, subjectOpts, subName, toast, fail, empty, dur, pct, topicsOf } from './util.js';
 import { addDays, weekStart, dayName, shortDate, diffDays } from '/shared/dates.js';
 
 let tab = 'planner';
@@ -201,7 +201,5 @@ ${(() => { let prev; return D.subjects.map((s) => {
     const cur = prog.get(Number(tr.dataset.t))?.revision_count || 0;
     save(tr, { revision_count: Math.max(0, cur + Number(b.dataset.rev)) });
   });
-  void $$;
-  void confirmDialog;
-  void topName;
+
 }

@@ -8,6 +8,7 @@ import { initDb, BRANCHES } from './db.js';
 import { createStore } from './store.js';
 import { ValidationError } from './validate.js';
 import { loadDemo, removeDemo } from './demo.js';
+import { isDate } from '../public/shared/dates.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -17,6 +18,7 @@ const MIME = {
 };
 const IMG_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
 const MAX_BODY = 4 * 1024 * 1024; // Vercel's request limit is 4.5 MB; the browser shrinks screenshots before upload
+const MAX_IMAGE = 2.5 * 1024 * 1024; // as base64 this is ~3.4 MB, safely inside MAX_BODY
 const YEAR = 365 * 24 * 3600;
 const SESSION_COOKIE = 'gate_session';
 
@@ -95,14 +97,13 @@ export async function createHandler({
     ['GET', /^\/api\/streams$/, async (b, m, c) => ({ streams: await c.S.listStreams(), available: await c.S.availableBranches() })],
     ['POST', /^\/api\/streams$/, (b, m, c) => c.S.addBranch(String(b.code || ''))],
     ['PUT', /^\/api\/settings\/(\w+)$/, (b, m, c) => c.S.putSetting(m[1], b.value)],
-    ['POST', /^\/api\/recompute$/, async (b, m, c) => (await c.S.recomputeAll(), { ok: true })],
 
-    ['POST', /^\/api\/mistakes$/, (b, m, c) => c.S.createMistake(b)],
+    ['POST', /^\/api\/mistakes$/, (b, m, c) => c.S.createMistake(b, c.today)],
     ['POST', /^\/api\/mistakes\/bulk$/, (b, m, c) => c.S.bulk(b)],
     ['PUT', /^\/api\/mistakes\/(\d+)$/, (b, m, c) => c.S.updateMistake(+m[1], b)],
     ['DELETE', /^\/api\/mistakes\/(\d+)$/, (b, m, c) => c.S.deleteMistake(+m[1])],
-    ['POST', /^\/api\/mistakes\/(\d+)\/duplicate$/, (b, m, c) => c.S.duplicateMistake(+m[1], b.date)],
-    ['POST', /^\/api\/mistakes\/(\d+)\/reviews$/, (b, m, c) => c.S.addReview(+m[1], b)],
+    ['POST', /^\/api\/mistakes\/(\d+)\/duplicate$/, (b, m, c) => c.S.duplicateMistake(+m[1], b.date, c.today)],
+    ['POST', /^\/api\/mistakes\/(\d+)\/reviews$/, (b, m, c) => c.S.addReview(+m[1], b, c.today)],
     ['PUT', /^\/api\/reviews\/(\d+)$/, (b, m, c) => c.S.updateReview(+m[1], b)],
     ['DELETE', /^\/api\/reviews\/(\d+)$/, (b, m, c) => c.S.deleteReview(+m[1])],
 
@@ -134,7 +135,7 @@ export async function createHandler({
       const mm = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/.exec(b.data || '');
       if (!mm) throw new ValidationError({ data: 'must be a PNG, JPEG, GIF or WebP data URL' });
       const buf = Buffer.from(mm[2], 'base64');
-      if (buf.length > 3 * 1024 * 1024) throw new ValidationError({ data: 'image larger than 3 MB' });
+      if (buf.length > MAX_IMAGE) throw new ValidationError({ data: 'image larger than 2.5 MB' });
       return c.S.saveAttachment(crypto.randomBytes(8).toString('hex') + IMG_EXT[mm[1]], mm[1], buf);
     }],
   ];
@@ -147,6 +148,8 @@ export async function createHandler({
         if (origin && new URL(origin).host !== req.headers.host) return send(res, 403, { error: 'Cross-origin request refused' });
 
         const session = verifySession(cookies(req)[SESSION_COOKIE]);
+
+        if (url.pathname === '/api/health' && req.method === 'GET') return (await db.query('SELECT 1'), send(res, 200, { ok: true }));
 
         // ----- accounts -----
         if (url.pathname === '/api/session' && req.method === 'GET') {
@@ -190,7 +193,8 @@ export async function createHandler({
           res.writeHead(200, { 'Content-Type': a.mime, 'Cache-Control': 'private, max-age=31536000, immutable' });
           return res.end(a.data);
         }
-        const ctx = { S, stream: Number(req.headers['x-stream']) || 0 };
+        // today = the browser's local calendar date (the server may be in another timezone)
+        const ctx = { S, stream: Number(req.headers['x-stream']) || 0, today: isDate(req.headers['x-today']) ? req.headers['x-today'] : undefined };
         for (const [method, rx, fn] of routes) {
           const m = rx.exec(url.pathname);
           if (m && method === req.method) {

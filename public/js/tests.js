@@ -1,4 +1,4 @@
-import { mount, D, esc, $, $$, api, opts, subjectOpts, subName, topName, causeName, toast, fail, openModal, confirmDialog, pct, num, empty, topicsOf } from './util.js';
+import { mount, D, esc, $, api, opts, subjectOpts, subName, topName, causeName, toast, fail, openModal, confirmDialog, pct, num, empty, topicsOf } from './util.js';
 import { testStats, repeatCount } from '/shared/analytics.js';
 import { todayStr } from '/shared/dates.js';
 import { lineChart, COLORS } from './charts.js';
@@ -155,5 +155,4 @@ ${t.notes ? `<h3 style="margin-top:12px">Analysis notes</h3><p class="pre">${esc
     } catch (ex) { fail(ex); }
   });
   $('#allM', m.dlg).addEventListener('click', () => (setFilter({ test: id }), m.close(), (location.hash = '#/mistakes')));
-  void $$;
 }

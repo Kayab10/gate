@@ -153,11 +153,4 @@ export function displayStatus(m, today) {
   if (m.status === 'new' && m.next_review <= today) return 'due_first';
   return m.status;
 }
-export const isActive = (m) => !m.archived;
 export const isUnresolved = (m) => !m.archived && m.status !== 'mastered';
-export function isDue(m, today) {
-  return isUnresolved(m) && m.next_review <= today;
-}
-export function isOverdue(m, today) {
-  return isUnresolved(m) && m.next_review < today;
-}

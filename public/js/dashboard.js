@@ -1,7 +1,7 @@
-import { mount, D, esc, $, api, subName, topName, causeName, toast, fail, pct, num, mins, empty, dur } from './util.js';
+import { mount, D, esc, $, api, subName, topName, toast, fail, pct, num, empty, dur } from './util.js';
 import { summary, weekly, causeStats, bySubject } from '/shared/analytics.js';
 import { buildPlan, BUCKETS } from '/shared/planner.js';
-import { diffDays, shortDate } from '/shared/dates.js';
+import { diffDays } from '/shared/dates.js';
 import { lineChart, barList } from './charts.js';
 import { snippet, showMistake } from './mistakes.js';
 import { focusReview } from './review.js';
@@ -97,13 +97,13 @@ export function renderDashboard(host, refresh) {
         await refresh();
       } catch (ex) { fail(ex); }
     }
-    const tk = e.target.closest('[data-task]');
-    if (tk) {
-      try {
-        await api('PUT', `/api/tasks/${tk.dataset.task}`, { done: tk.checked });
-        await refresh();
-      } catch (ex) { fail(ex); }
-    }
   });
-  void mins; void causeName; void shortDate;
+  root.addEventListener('change', async (e) => {
+    const tk = e.target.closest('[data-task]'); // same event as the schedule page's checkboxes
+    if (!tk) return;
+    try {
+      await api('PUT', `/api/tasks/${tk.dataset.task}`, { done: tk.checked });
+      await refresh();
+    } catch (ex) { fail(ex); }
+  });
 }
