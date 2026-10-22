@@ -35,8 +35,9 @@ const hue = (t) => (t.subject_id ? (t.subject_id * 47) % 360 : 250);
 function card(t) {
   const m = spent(t.id);
   return `<div class="tcard${t.done ? ' done' : ''}" style="--h:${hue(t)}" draggable="true" data-card="${t.id}">
-  <div class="top"><input type="checkbox" data-chk="${t.id}"${t.done ? ' checked' : ''} aria-label="Done: ${esc(t.title)}"><span class="tt" data-edit="${t.id}">${esc(t.title)}</span></div>
-  <div class="meta"><span>${t.subject_id ? `<span class="tag">${esc(subName(t.subject_id))}</span>` : ''}${m ? ` ${dur(m)}` : ''}</span>${t.done ? '' : `<button class="go" data-play="${t.id}" title="Start the timer on this" aria-label="Start timer">▶</button>`}</div></div>`;
+  <input type="checkbox" data-chk="${t.id}"${t.done ? ' checked' : ''} aria-label="Done: ${esc(t.title)}">
+  <div class="cmain"><span class="tt" data-edit="${t.id}">${esc(t.title)}</span><div class="cmeta">${t.subject_id ? `<span class="sd"></span><span class="sn">${esc(subName(t.subject_id))}</span>` : ''}${m ? `<span>${dur(m)}</span>` : ''}</div></div>
+  ${t.done ? '' : `<button class="go" data-play="${t.id}" title="Start the timer on this" aria-label="Start timer">▶</button>`}</div>`;
 }
 
 function row(t, { date = false } = {}) {
@@ -55,11 +56,15 @@ function bindCards(body, refresh) {
       if (pl) return (startTask(pl.dataset.play), (location.hash = '#/timer'));
       const ed = e.target.closest('[data-edit]');
       if (ed) return editTask(D.tasks.find((t) => t.id === Number(ed.dataset.edit)), refresh);
+      const td = e.target.closest('[data-today]');
+      if (td) return (await api('PUT', `/api/tasks/${td.dataset.today}`, { date: D.today }), refresh());
       const add = e.target.closest('[data-addcol]');
       if (add) {
+        const col = add.closest('.col');
+        if (col.querySelector('input.quick')) return col.querySelector('input.quick').focus();
         const inp = document.createElement('input');
         inp.className = 'quick'; inp.placeholder = 'Task title, then Enter'; inp.maxLength = 300;
-        add.replaceWith(inp);
+        col.querySelector('.colbody').prepend(inp);
         inp.focus();
         const done = async (save) => {
           const title = inp.value.trim();
@@ -165,25 +170,37 @@ function week(host, refresh) {
   wk ||= weekStart(D.today);
   const days = [...Array(7)].map((_, i) => addDays(wk, i));
   const all = D.tasks.filter((t) => t.date >= days[0] && t.date <= days[6]);
+  const doneN = all.filter((t) => t.done).length;
+  const weekMin = days.reduce((a, d) => a + D.studyLog.filter((l) => l.date === d).reduce((x, l) => x + l.minutes, 0), 0);
   const missed = D.tasks.filter((t) => !t.done && t.date < D.today);
-  const showBacklog = missed.length && days.includes(D.today);
+  const isNow = days.includes(D.today);
   body.innerHTML = `
-<div class="row between" style="margin-bottom:12px"><div class="row"><button class="btn" id="prevW" aria-label="Previous week">‹</button><button class="btn" id="thisW">This week</button><button class="btn" id="nextW" aria-label="Next week">›</button></div><span><b>${shortDate(days[0])} – ${shortDate(days[6])}</b> <span class="muted small">${all.filter((t) => t.done).length}/${all.length} done</span></span></div>
-<p class="hint" style="margin:0 0 10px">Drag a card to another day to move it. Tap a title to edit.</p>
-<div class="board">
-  ${showBacklog ? `<div class="col backlog" data-date="${esc(D.today)}"><div class="col-head"><span>Backlog<small>Drop here to do it today</small></span><span class="n">${missed.length}</span></div><div class="colbody">${missed.slice(-15).map(card).join('')}</div></div>` : ''}
-  ${days.map((d) => {
-    const ts = D.tasks.filter((t) => t.date === d);
+<section class="card wkhead">
+  <div class="row between"><div class="seg2"><button id="prevW" aria-label="Previous week">‹</button><button id="thisW"${isNow ? ' aria-current="true"' : ''}>${isNow ? 'This week' : 'Go to this week'}</button><button id="nextW" aria-label="Next week">›</button></div>
+    <b>${shortDate(days[0])} – ${shortDate(days[6])}</b></div>
+  <div class="wkprog"><div class="prog"><div style="width:${all.length ? (doneN / all.length) * 100 : 0}%"></div></div><span class="muted small">${doneN}/${all.length} done · ${dur(weekMin) || '0m'} studied</span></div>
+</section>
+${missed.length && isNow ? `<section class="backlogbar"><div class="row between"><span><b>Backlog</b> <span class="muted small">· ${missed.length} overdue — drag onto a day or</span></span><button class="btn small" id="allToday">move all to today</button></div>
+  <div class="bchips">${missed.slice(-12).map((t) => `<span class="bchip" style="--h:${hue(t)}" draggable="true" data-card="${t.id}"><span data-edit="${t.id}">${esc(t.title)}</span><small>${esc(shortDate(t.date))}</small><button data-today="${t.id}" title="Move to today" aria-label="Move to today">→</button></span>`).join('')}</div></section>` : ''}
+<div class="board7">${days.map((d) => {
+    const ts = D.tasks.filter((t) => t.date === d).sort((x, y) => x.done - y.done || x.id - y.id);
     const logged = D.studyLog.filter((l) => l.date === d).reduce((a, l) => a + l.minutes, 0);
-    return `<div class="col${d === D.today ? ' today' : ''}" data-date="${d}"><div class="col-head"><span>${dayName(d)}<small>${shortDate(d)}${logged ? ` · ${dur(logged)} studied` : ''}</small></span><span class="n">${ts.length}</span></div>
-      ${D.tests.filter((t) => t.date === d).map((t) => `<div class="badge info" style="margin:0 0 8px">📝 ${esc(t.name)}</div>`).join('')}
-      <div class="colbody">${ts.map(card).join('')}</div><button class="addrow" data-addcol="${d}">＋ Add task</button></div>`;
-  }).join('')}
-</div>`;
+    const tests = D.tests.filter((t) => t.date === d);
+    return `<div class="col wcol${d === D.today ? ' today' : ''}${d < D.today ? ' past' : ''}" data-date="${d}">
+      <div class="ch"><div class="chd"><span class="dow">${dayName(d)}</span><span class="dnum">${Number(d.slice(8))}</span></div><div class="chm">${ts.length ? `${ts.filter((t) => t.done).length}/${ts.length}` : ''}${logged ? `<small>${dur(logged)}</small>` : ''}</div><button class="plus" data-addcol="${d}" aria-label="Add task on ${d}" title="Add task">＋</button></div>
+      ${tests.map((t) => `<div class="badge info" style="margin:0 0 8px">📝 ${esc(t.name)}</div>`).join('')}
+      <div class="colbody">${ts.map(card).join('') || '<div class="emptyday">Free</div>'}</div></div>`;
+  }).join('')}</div>
+<p class="hint" style="margin:10px 2px 0">Drag a card to another day to move it · tap a title to edit.</p>`;
   bindCards(body, refresh);
   $('#prevW', body).addEventListener('click', () => ((wk = addDays(wk, -7)), week(host, refresh)));
   $('#nextW', body).addEventListener('click', () => ((wk = addDays(wk, 7)), week(host, refresh)));
   $('#thisW', body).addEventListener('click', () => ((wk = weekStart(D.today)), week(host, refresh)));
+  $('#allToday', body)?.addEventListener('click', async () => {
+    try { for (const t of missed) await api('PUT', `/api/tasks/${t.id}`, { date: D.today }); await refresh(); } catch (ex) { fail(ex); }
+  });
+  const tc = $('.wcol.today', body), bd = $('.board7', body);
+  if (tc && bd) bd.scrollLeft = Math.max(0, tc.offsetLeft + tc.offsetWidth - bd.offsetLeft - bd.clientWidth + 8); // only scroll as far as needed to show today
 }
 
 /* ------------------------------ syllabus checklist ------------------------------ */
