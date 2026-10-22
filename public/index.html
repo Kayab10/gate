@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GATE Tracker</title>
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#f4f5f9">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" href="/icons/icon-192.png">
 <link rel="stylesheet" href="/style.css">
 <script>
-  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  let t = 'light'; try { t = localStorage.getItem('theme') || 'light'; } catch {} document.documentElement.dataset.theme = t;
 </script>
 </head>
 <body>

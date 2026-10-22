@@ -1,6 +1,6 @@
 // To-do: today's tasks, the week at a glance, and the syllabus checklist. Time is tracked on the Timer page;
 // the ▶ button on a task starts the timer for it.
-import { mount, D, esc, $, api, opts, subjectOpts, subName, toast, fail, empty, dur, pct, topicsOf } from './util.js';
+import { mount, D, esc, $, api, subjectOpts, subName, fail, dur, pct, topicsOf, openModal } from './util.js';
 import { startTask } from './timer.js';
 import { addDays, weekStart, dayName, shortDate } from '/shared/dates.js';
 
@@ -14,7 +14,7 @@ export function renderTodo(host, refresh) {
   const root = mount(host);
   root.innerHTML = `
 <div class="page-head"><div><h1>To-do</h1></div></div>
-<div class="tabs" role="tablist">${[['today', 'Today'], ['week', 'This week'], ['syllabus', 'Syllabus']].map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+<div class="tabs" role="tablist">${[['today', 'Today'], ['week', 'Week board'], ['syllabus', 'Syllabus']].map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
 <div id="tabBody"></div>`;
   root.addEventListener('click', (e) => {
     const t = e.target.closest('[data-tab]');
@@ -23,48 +23,87 @@ export function renderTodo(host, refresh) {
   ({ today, week, syllabus })[tab]($('#tabBody', root), refresh);
 }
 
-const taskRow = (t, { showDate = false } = {}) => {
-  const m = spent(t.id);
-  return `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-chk="${t.id}"${t.done ? ' checked' : ''} aria-label="Done: ${esc(t.title)}"><span class="tt">${esc(t.title)}${showDate ? ` <span class="muted small">${esc(t.date)}</span>` : ''}${t.subject_id || m ? `<div class="muted small">${[t.subject_id && esc(subName(t.subject_id)), m && `${dur(m)} studied`].filter(Boolean).join(' · ')}</div>` : ''}</span>${t.done ? '' : `<button data-play="${t.id}" title="Start the timer on this" aria-label="Start timer">▶</button>`}<button data-del="${t.id}" aria-label="Delete task">✕</button></div>`;
-};
+/* ------------------------------ cards + board helpers ------------------------------ */
+const hue = (t) => (t.subject_id ? (t.subject_id * 47) % 360 : 250);
 
-/** Shared by the Today and Week tabs: checkbox, play, delete. */
-function bindTasks(body, refresh) {
+function card(t) {
+  const m = spent(t.id);
+  return `<div class="tcard${t.done ? ' done' : ''}" style="--h:${hue(t)}" draggable="true" data-card="${t.id}">
+  <div class="top"><input type="checkbox" data-chk="${t.id}"${t.done ? ' checked' : ''} aria-label="Done: ${esc(t.title)}"><span class="tt" data-edit="${t.id}">${esc(t.title)}</span></div>
+  <div class="meta"><span>${t.subject_id ? `<span class="tag">${esc(subName(t.subject_id))}</span>` : ''}${m ? ` ${dur(m)}` : ''}</span>${t.done ? '' : `<button class="go" data-play="${t.id}" title="Start the timer on this" aria-label="Start timer">▶</button>`}</div></div>`;
+}
+
+/** Click / change handling shared by the Today list and the board. */
+function bindCards(body, refresh) {
   body.addEventListener('click', async (e) => {
     try {
-      const del = e.target.closest('[data-del]');
-      if (del) return (await api('DELETE', `/api/tasks/${del.dataset.del}`), refresh());
-      const td = e.target.closest('[data-today]');
-      if (td) return (await api('PUT', `/api/tasks/${td.dataset.today}`, { date: D.today }), refresh());
       const pl = e.target.closest('[data-play]');
       if (pl) return (startTask(pl.dataset.play), (location.hash = '#/timer'));
+      const ed = e.target.closest('[data-edit]');
+      if (ed) return editTask(D.tasks.find((t) => t.id === Number(ed.dataset.edit)), refresh);
+      const add = e.target.closest('[data-addcol]');
+      if (add) {
+        const inp = document.createElement('input');
+        inp.className = 'quick'; inp.placeholder = 'Task title, then Enter'; inp.maxLength = 300;
+        add.replaceWith(inp);
+        inp.focus();
+        const done = async (save) => {
+          const title = inp.value.trim();
+          if (save && title) try { await api('POST', '/api/tasks', { title, date: add.dataset.addcol, kind: 'study' }); await refresh(); } catch (ex) { fail(ex); }
+          else refresh(false);
+        };
+        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') done(true); else if (ev.key === 'Escape') done(false); });
+        inp.addEventListener('blur', () => done(true), { once: true });
+      }
     } catch (ex) { fail(ex); }
   });
   body.addEventListener('change', async (e) => {
     const c = e.target.closest('[data-chk]');
     if (c) try { await api('PUT', `/api/tasks/${c.dataset.chk}`, { done: c.checked }); await refresh(); } catch (ex) { fail(ex); }
   });
+  // drag a card to another day to reschedule it
+  let dragId = null;
+  body.addEventListener('dragstart', (e) => {
+    const c = e.target.closest?.('[data-card]');
+    if (!c) return;
+    dragId = Number(c.dataset.card);
+    c.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(dragId));
+  });
+  body.addEventListener('dragend', (e) => { e.target.closest?.('[data-card]')?.classList.remove('dragging'); body.querySelectorAll('.col.drop').forEach((c) => c.classList.remove('drop')); });
+  body.addEventListener('dragover', (e) => {
+    const col = e.target.closest?.('.col[data-date]');
+    if (!col || dragId == null) return;
+    e.preventDefault();
+    body.querySelectorAll('.col.drop').forEach((c) => c !== col && c.classList.remove('drop'));
+    col.classList.add('drop');
+  });
+  body.addEventListener('drop', async (e) => {
+    const col = e.target.closest?.('.col[data-date]');
+    if (!col || dragId == null) return;
+    e.preventDefault();
+    const id = dragId;
+    dragId = null;
+    try { await api('PUT', `/api/tasks/${id}`, { date: col.dataset.date }); await refresh(); } catch (ex) { fail(ex); }
+  });
 }
 
-function addForm(date) {
-  return `<form id="tf" class="card" autocomplete="off">
-  <div class="row"><input name="title" required placeholder="Add a to-do…" maxlength="300" style="flex:1;min-width:200px" aria-label="New to-do"><button class="btn primary">Add</button></div>
-  <details class="more" style="margin-top:8px"><summary>Date, subject, repeat</summary><div class="fgrid" style="margin-top:8px">
-    <label><span class="lab">Date</span><input type="date" name="date" value="${esc(date)}" required></label>
-    <label><span class="lab">Subject</span><select name="subject_id"><option value="">—</option>${subjectOpts()}</select></label>
-    <label><span class="lab">Repeat weekly for (extra weeks)</span><input type="number" name="repeat_weeks" min="0" max="30" value="0"></label>
-  </div></details></form>`;
-}
-function bindAdd(body, refresh) {
-  const f = $('#tf', body).elements;
-  $('#tf', body).addEventListener('submit', async (e) => {
+function editTask(t, refresh) {
+  if (!t) return;
+  const m = openModal('Edit to-do', `<form autocomplete="off"><div class="fgrid">
+    <label class="full"><span class="lab">Title</span><input name="title" value="${esc(t.title)}" maxlength="300" required></label>
+    <label><span class="lab">Date</span><input name="date" type="date" value="${esc(t.date)}" required></label>
+    <label><span class="lab">Subject</span><select name="subject_id"><option value="">—</option>${subjectOpts(t.subject_id)}</select></label>
+  </div><p class="err" data-err></p>
+  <div class="row" style="margin-top:10px"><button class="btn primary">Save</button><button type="button" class="btn danger" id="delT" style="margin-left:auto">Delete</button></div></form>`);
+  $('form', m.dlg).addEventListener('submit', async (e) => {
     e.preventDefault();
-    try {
-      await api('POST', '/api/tasks', { title: f.title.value, date: f.date.value, kind: 'study', subject_id: f.subject_id.value, repeat_weeks: f.repeat_weeks.value });
-      toast(Number(f.repeat_weeks.value) ? `Added, repeating for ${f.repeat_weeks.value} more week(s)` : 'Added');
-      wk = weekStart(f.date.value);
-      await refresh();
-    } catch (ex) { fail(ex); }
+    const f = e.target.elements;
+    try { await api('PUT', `/api/tasks/${t.id}`, { title: f.title.value, date: f.date.value, subject_id: f.subject_id.value }); m.close(); await refresh(); } catch (ex) { $('[data-err]', m.dlg).textContent = ex.message; }
+  });
+  $('#delT', m.dlg).addEventListener('click', async () => {
+    try { await api('DELETE', `/api/tasks/${t.id}`); m.close(); await refresh(); } catch (ex) { fail(ex); }
   });
 }
 
@@ -75,39 +114,45 @@ function today(host, refresh) {
   const missed = D.tasks.filter((t) => !t.done && t.date < D.today);
   const doneN = list.filter((t) => t.done).length;
   body.innerHTML = `
-${addForm(D.today)}
-<section class="card"><div class="row between"><h2 style="margin:0">Today</h2><span class="muted small">${list.length ? `${doneN}/${list.length} done` : ''}</span></div>
-  ${list.length ? `<div class="prog" style="margin:8px 0"><div style="width:${(doneN / list.length) * 100}%"></div></div>${list.map((t) => taskRow(t)).join('')}` : '<p class="muted small" style="margin:8px 0 0">Nothing planned for today yet.</p>'}</section>
-${missed.length ? `<section class="card"><div class="row between"><h2 style="margin:0">Missed (${missed.length})</h2><button class="btn small" id="allToday">Move all to today</button></div>${missed.slice(-15).map((t) => `<div class="task"><span class="tt">${esc(t.title)} <span class="muted small">${esc(t.date)}</span></span><button data-today="${t.id}" title="Move to today">→ today</button><input type="checkbox" data-chk="${t.id}" aria-label="Mark done"><button data-del="${t.id}" aria-label="Delete">✕</button></div>`).join('')}${missed.length > 15 ? `<p class="muted small">Showing the latest 15 of ${missed.length}.</p>` : ''}</section>` : ''}`;
-  bindAdd(body, refresh);
-  bindTasks(body, refresh);
+<form id="tf" class="card" autocomplete="off">
+  <div class="row"><input name="title" required placeholder="Add a to-do for today…" maxlength="300" style="flex:1;min-width:200px" aria-label="New to-do"><select name="subject_id" aria-label="Subject" style="max-width:220px"><option value="">Subject (optional)</option>${subjectOpts()}</select><button class="btn primary">Add</button></div>
+</form>
+<section class="card"><div class="row between"><h2 style="margin:0">Today's plan</h2><span class="muted small">${list.length ? `${doneN} of ${list.length} done` : ''}</span></div>
+  ${list.length ? `<div class="prog" style="margin:10px 0 14px"><div style="width:${(doneN / list.length) * 100}%"></div></div><div class="cardlist">${list.map(card).join('')}</div>` : '<p class="muted small" style="margin:8px 0 0">Nothing planned for today yet.</p>'}</section>
+${missed.length ? `<section class="card"><div class="row between"><h2 style="margin:0">Backlog (${missed.length})</h2><button class="btn small" id="allToday">Move all to today</button></div><div class="cardlist" style="margin-top:12px">${missed.slice(-12).map(card).join('')}</div></section>` : ''}`;
+  const f = $('#tf', body).elements;
+  $('#tf', body).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await api('POST', '/api/tasks', { title: f.title.value, date: D.today, kind: 'study', subject_id: f.subject_id.value }); await refresh(); } catch (ex) { fail(ex); }
+  });
+  bindCards(body, refresh);
   $('#allToday', body)?.addEventListener('click', async () => {
-    try {
-      for (const t of missed) await api('PUT', `/api/tasks/${t.id}`, { date: D.today });
-      await refresh();
-    } catch (ex) { fail(ex); }
+    try { for (const t of missed) await api('PUT', `/api/tasks/${t.id}`, { date: D.today }); await refresh(); } catch (ex) { fail(ex); }
   });
 }
 
-/* ------------------------------ week ------------------------------ */
+/* ------------------------------ week board ------------------------------ */
 function week(host, refresh) {
   const body = mount(host);
   wk ||= weekStart(D.today);
   const days = [...Array(7)].map((_, i) => addDays(wk, i));
   const all = D.tasks.filter((t) => t.date >= days[0] && t.date <= days[6]);
+  const missed = D.tasks.filter((t) => !t.done && t.date < D.today);
+  const showBacklog = missed.length && days.includes(D.today);
   body.innerHTML = `
-${addForm(days.includes(D.today) ? D.today : days[0])}
-<div class="row between" style="margin-bottom:8px"><div class="row"><button class="btn" id="prevW" aria-label="Previous week">‹</button><button class="btn" id="thisW">This week</button><button class="btn" id="nextW" aria-label="Next week">›</button></div><span><b>${shortDate(days[0])} – ${shortDate(days[6])}</b> <span class="muted small">${all.filter((t) => t.done).length}/${all.length} done</span></span></div>
-<div class="week">${days.map((d) => {
+<div class="row between" style="margin-bottom:12px"><div class="row"><button class="btn" id="prevW" aria-label="Previous week">‹</button><button class="btn" id="thisW">This week</button><button class="btn" id="nextW" aria-label="Next week">›</button></div><span><b>${shortDate(days[0])} – ${shortDate(days[6])}</b> <span class="muted small">${all.filter((t) => t.done).length}/${all.length} done</span></span></div>
+<p class="hint" style="margin:0 0 10px">Drag a card to another day to move it. Tap a title to edit.</p>
+<div class="board">
+  ${showBacklog ? `<div class="col backlog" data-date="${esc(D.today)}"><div class="col-head"><span>Backlog<small>Drop here to do it today</small></span><span class="n">${missed.length}</span></div>${missed.slice(-15).map(card).join('')}</div>` : ''}
+  ${days.map((d) => {
     const ts = D.tasks.filter((t) => t.date === d);
     const logged = D.studyLog.filter((l) => l.date === d).reduce((a, l) => a + l.minutes, 0);
-    const tests = D.tests.filter((t) => t.date === d);
-    return `<div class="day${d === D.today ? ' today' : ''}"><h4><span>${dayName(d)} ${shortDate(d)}</span>${logged ? `<span class="muted small">${dur(logged)}</span>` : ''}</h4>
-      ${tests.map((t) => `<div class="badge info" style="margin-top:4px">📝 ${esc(t.name)}</div>`).join('')}
-      ${ts.map((t) => taskRow(t)).join('') || '<div class="muted small">—</div>'}</div>`;
-  }).join('')}</div>`;
-  bindAdd(body, refresh);
-  bindTasks(body, refresh);
+    return `<div class="col${d === D.today ? ' today' : ''}" data-date="${d}"><div class="col-head"><span>${dayName(d)}<small>${shortDate(d)}${logged ? ` · ${dur(logged)} studied` : ''}</small></span><span class="n">${ts.length}</span></div>
+      ${D.tests.filter((t) => t.date === d).map((t) => `<div class="badge info" style="margin:0 0 8px">📝 ${esc(t.name)}</div>`).join('')}
+      ${ts.map(card).join('')}<button class="addrow" data-addcol="${d}">＋ Add task</button></div>`;
+  }).join('')}
+</div>`;
+  bindCards(body, refresh);
   $('#prevW', body).addEventListener('click', () => ((wk = addDays(wk, -7)), week(host, refresh)));
   $('#nextW', body).addEventListener('click', () => ((wk = addDays(wk, 7)), week(host, refresh)));
   $('#thisW', body).addEventListener('click', () => ((wk = weekStart(D.today)), week(host, refresh)));

@@ -135,7 +135,7 @@ document.addEventListener('keydown', (e) => {
     quickAdd();
   }
 });
-const themeMeta = () => document.querySelector('meta[name=theme-color]')?.setAttribute('content', document.documentElement.dataset.theme === 'light' ? '#eeeff3' : '#000000');
+const themeMeta = () => document.querySelector('meta[name=theme-color]')?.setAttribute('content', document.documentElement.dataset.theme === 'light' ? '#f4f5f9' : '#12141c');
 themeMeta();
 $('#themeBtn').addEventListener('click', () => {
   const dark = document.documentElement.dataset.theme !== 'light';

@@ -21,6 +21,11 @@ export function renderToday(host, refresh) {
     return { l, t, p: t ? testStats(t).scorePct : null };
   });
   const running = runningInfo();
+  const studiedSet = new Set(D.progress.filter((p) => p.studied).map((p) => p.topic_id));
+  const tops = D.topics.filter((t) => !t.parent_id);
+  const bySub = D.subjects.map((sb) => { const ts = tops.filter((t) => t.subject_id === sb.id); return { sb, n: ts.length, done: ts.filter((t) => studiedSet.has(t.id)).length }; }).filter((x) => x.n);
+  const sylPct = tops.length ? tops.filter((t) => studiedSet.has(t.id)).length / tops.length : 0;
+  const C = 2 * Math.PI * 54;
 
   root.innerHTML = `
 <div class="page-head"><div><h1>Today</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>${exam ? `<div class="countdown" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days left</span></div>` : ''}</div>
@@ -40,6 +45,9 @@ export function renderToday(host, refresh) {
 <section class="card"><div class="row between"><h2 style="margin:0">Due for review</h2><a href="#/concepts" class="small">Concepts ›</a></div>
   ${due.length ? due.slice(0, 6).map((m) => `<div class="plan-item"><div><b>${esc(m.title)}</b><div class="muted small">${esc(subName(m.subject_id))}${m.topic_id ? ' › ' + esc(topName(m.topic_id)) : ''}</div></div><span class="badge">${KINDS[m.kind]?.[0] || ''}</span></div>`).join('') + (due.length > 6 ? `<p class="muted small">…and ${due.length - 6} more</p>` : '') : empty(D.live.length ? 'Nothing due — all caught up.' : 'Add a concept you found hard and it will show up here.')}</section>
 </div>
+<section class="card"><div class="row between"><h2 style="margin:0">Syllabus progress</h2><a href="#/todo" class="small">Checklist ›</a></div>
+  <div class="syl" style="margin-top:14px"><div class="ringbox"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="rt" cx="60" cy="60" r="54"/><circle class="rp" cx="60" cy="60" r="54" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - sylPct)).toFixed(2)}" transform="rotate(-90 60 60)"/></svg><div class="mid"><b>${Math.round(sylPct * 100)}%</b><span>covered</span></div></div>
+    <div>${bySub.length ? bySub.map((x) => `<div class="subrow"><span>${esc(x.sb.name)}</span><div class="track"><div style="width:${(x.done / x.n) * 100}%"></div></div><span class="n">${x.done}/${x.n}</span></div>`).join('') : empty('Tick topics in the To-do ▸ Syllabus tab to see progress here.')}</div></div></section>
 <section class="card"><div class="row between"><h2 style="margin:0">Latest scores</h2><a href="#/tests" class="small">Tests ›</a></div>
   <div class="tiles" style="margin-top:10px">${latest.map((x) => `<div class="tile"><div class="v">${pct(x.p)}</div><div class="l">${x.l}</div></div>`).join('')}</div></section>`;
 
