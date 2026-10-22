@@ -210,7 +210,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(6px); anim
   #toasts { left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); } .toast { max-width: none; }
   .outcomes { grid-template-columns: 1fr 1fr; } .sticky-bulk { bottom: 8px; } .clip { max-width: 55vw; }
   .week { grid-template-columns: 1fr; } .day { min-height: 0; } .kv { grid-template-columns: 1fr; } .bars .br { grid-template-columns: 90px 1fr 56px; }
-  .g2 { grid-template-columns: 1fr; }
+  .g2 { grid-template-columns: minmax(0, 1fr); }
   /* wide tables -> stacked cards */
   .tablewrap:has(table.cards) { border: 0; background: none; overflow: visible; }
   table.cards, table.cards tbody { display: block; } table.cards thead { display: none; }
@@ -392,7 +392,7 @@ dialog::backdrop { background: rgba(44,49,66,.3); backdrop-filter: blur(3px); }
 .pick.on { background: var(--accent-soft); border-color: var(--accent); } .pick.on .rb { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
 .miniStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .miniStats b { display: block; font-size: 1.5rem; letter-spacing: -.02em; } .miniStats span { font-size: .76rem; color: var(--muted); }
 .scrollbox { max-height: 340px; overflow-y: auto; }
-@media (max-width: 960px) { .timergrid { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .timergrid { grid-template-columns: minmax(0, 1fr); } }
 
 /* to-do redesign */
 .todogrid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -412,7 +412,7 @@ dialog::backdrop { background: rgba(44,49,66,.3); backdrop-filter: blur(3px); }
 .trow input[type=checkbox]:checked::after { content: ""; width: 5px; height: 10px; border: solid var(--accent-ink); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
 .grouplabel { font-size: .7rem; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 14px 0 2px; }
 .colbody { max-height: 56vh; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
-@media (max-width: 960px) { .todogrid { grid-template-columns: 1fr; } .quickadd { grid-template-columns: 1fr 1fr; } .quickadd input[name=title] { grid-column: 1 / -1; } .quickadd .btn { grid-column: 1 / -1; } }
+@media (max-width: 960px) { .todogrid { grid-template-columns: minmax(0, 1fr); } .quickadd { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .quickadd input[name=title] { grid-column: 1 / -1; } .quickadd .btn { grid-column: 1 / -1; } }
 .pillstat { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 14px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: .84rem; color: var(--muted); } .pillstat b { font-size: 1rem; color: var(--text); }
 
 /* week board redesign: seven even columns, white cards with a colour bar */
@@ -452,3 +452,7 @@ dialog::backdrop { background: rgba(44,49,66,.3); backdrop-filter: blur(3px); }
 .wcol .tcard .tt { overflow-wrap: break-word; hyphens: auto; padding-right: 14px; }
 .seg2 button { border: 1px solid transparent; } .seg2 button[aria-label] { font-size: 1.1rem; line-height: 1; padding: 6px 12px; color: var(--text); }
 @media (max-width: 860px) { .board7 { grid-auto-columns: 78%; } }
+
+/* never let a long <select> option or date input widen a mobile layout */
+.quickadd > * { min-width: 0; } .quickadd select, .quickadd input { width: 100%; }
+.todomain, .todoside, .timerside { min-width: 0; }
