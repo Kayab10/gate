@@ -83,3 +83,11 @@ export function stackRows(rows) {
     return `<div class="stackrow"><span class="sl" title="${esc(r.label)}">${esc(r.label)}</span><div class="stack1">${r.parts.map((p) => (p.value ? `<i class="${p.cls}" style="width:${(p.value / tot) * 100}%" title="${esc(p.title)}">${p.value}</i>` : '')).join('')}</div><span class="sr">${esc(r.right || '')}</span></div>`;
   }).join('')}</div>`;
 }
+
+/** Circular progress (0–1). */
+export function ring(p, { r = 54 } = {}) {
+  const k = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(1, p || 0));
+  return `<svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="rt" cx="60" cy="60" r="${r}"/><circle class="rp" data-ring cx="60" cy="60" r="${r}" stroke-dasharray="${k.toFixed(2)}" stroke-dashoffset="${(k * (1 - v)).toFixed(2)}" transform="rotate(-90 60 60)"/></svg>`;
+}
+export const ringOffset = (p, r = 54) => (2 * Math.PI * r * (1 - Math.max(0, Math.min(1, p || 0)))).toFixed(2);
