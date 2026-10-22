@@ -54,3 +54,11 @@ export function sparkBars(values, color = 'var(--accent)', h = 36) {
   const w = 6, gap = 2;
   return `<svg width="${values.length * (w + gap)}" height="${h}" role="img" aria-label="Trend">${values.map((v, i) => `<rect x="${i * (w + gap)}" y="${h - (v / max) * (h - 2) - 1}" width="${w}" height="${Math.max(1, (v / max) * (h - 2))}" rx="1" fill="${color}"><title>${v}</title></rect>`).join('')}</svg>`;
 }
+
+/** Circular progress (0–1). The gradient is defined once in index.html (#ringGrad). */
+export function ring(p, { r = 54 } = {}) {
+  const c = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(1, p || 0));
+  return `<svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="rt" cx="60" cy="60" r="${r}"/><circle class="rp" data-ring cx="60" cy="60" r="${r}" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - v)).toFixed(2)}" transform="rotate(-90 60 60)"/></svg>`;
+}
+export const ringOffset = (p, r = 54) => (2 * Math.PI * r * (1 - Math.max(0, Math.min(1, p || 0)))).toFixed(2);

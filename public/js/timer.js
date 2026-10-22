@@ -2,6 +2,7 @@
 // counting while you visit other pages, switch tabs, or reload. Finished time is logged automatically, optionally against a to-do.
 import { mount, D, esc, $, api, opts, subjectOpts, subName, toast, fail, empty, dur } from './util.js';
 import { todayStr, addDays, weekStart } from '/shared/dates.js';
+import { ring, ringOffset } from './charts.js';
 
 const KEY = 'pomodoro';
 const MODES = { focus: 'Focus', short: 'Short break', long: 'Long break' };
@@ -16,6 +17,7 @@ const full = (mode = st.mode) => Math.max(1, Math.round(Number(st.cfg[mode]) || 
 const remaining = () => (st.running ? Math.max(0, Math.round((st.endsAt - Date.now()) / 1000)) : st.left);
 const swElapsed = () => Math.floor(st.swElapsed + (st.swRunning ? (Date.now() - st.swStart) / 1000 : 0));
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+const prog = (total, left) => (st.kind === 'pomodoro' ? (total - left) / total : (swElapsed() % 60) / 60);
 const hms = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}:${mmss(s % 3600)}` : mmss(s));
 const reset = () => { document.title = 'GATE Tracker'; };
 
@@ -145,8 +147,7 @@ function drawClock(el) {
   ${pomo ? `<div class="tabs" role="tablist" style="margin-bottom:12px">${Object.entries(MODES).map(([k, l]) => `<button type="button" role="tab" data-mode="${k}" aria-selected="${st.mode === k}">${l} · ${st.cfg[k]}m</button>`).join('')}</div>` : ''}
   <label class="pomo-task"><span class="lab">Working on (today's to-do; its subject goes in the log)</span>
     <select data-f="task_id"><option value="">Nothing specific</option>${(D.tasks || []).filter((t) => t.date === todayStr() && !t.done).map((t) => `<option value="${t.id}"${String(t.id) === String(st.task_id) ? ' selected' : ''}>${esc(t.title)}</option>`).join('')}</select></label>
-  <div class="pomo-clock" data-clock aria-live="off">${pomo ? mmss(left) : hms(swElapsed())}</div>
-  ${pomo ? `<div class="prog" style="margin:8px 0 14px"><div data-bar style="width:${Math.min(100, ((total - left) / total) * 100)}%"></div></div>` : '<div style="height:22px"></div>'}
+  <div class="timerring">${ring(prog(total, left))}<div class="pomo-clock" data-clock aria-live="off">${pomo ? mmss(left) : hms(swElapsed())}</div><div class="sub">${pomo ? MODES[st.mode] : 'Stopwatch'}</div></div>
   <div class="row">
     <button type="button" class="btn primary" data-act="${running ? 'pause' : 'start'}">${running ? 'Pause' : started ? 'Resume' : 'Start'}</button>
     <button type="button" class="btn" data-act="reset">${pomo ? 'Reset' : 'Stop & log'}</button>
@@ -174,9 +175,9 @@ function drawClock(el) {
     if (st.kind === 'pomodoro') {
       const total = full(), left = remaining();
       c.textContent = mmss(left);
-      el.querySelector('[data-bar]').style.width = `${Math.min(100, ((total - left) / total) * 100)}%`;
       el.querySelector('[data-done]').textContent = st.done;
     } else c.textContent = hms(swElapsed());
+    el.querySelector('[data-ring]')?.setAttribute('stroke-dashoffset', ringOffset(prog(full(), remaining())));
   };
   listeners.add(tick);
   draw();

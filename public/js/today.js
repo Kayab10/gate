@@ -1,10 +1,13 @@
 // Today: everything you need for the day on one screen, no forms.
 import { mount, D, esc, $, api, subName, topName, fail, empty, dur, pct } from './util.js';
+import { ring } from './charts.js';
 import { dueConcepts, startReview, KINDS } from './concepts.js';
 import { startTask, runningInfo } from './timer.js';
 import { TIERS } from './tests.js';
 import { testStats } from '/shared/analytics.js';
 import { diffDays, weekStart, addDays } from '/shared/dates.js';
+
+const greeting = () => { const h = new Date().getHours(); return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 
 export function renderToday(host, refresh) {
   const root = mount(host);
@@ -23,16 +26,20 @@ export function renderToday(host, refresh) {
   const running = runningInfo();
 
   root.innerHTML = `
-<div class="page-head"><div><h1>Today</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>${exam ? `<div class="countdown" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days left</span></div>` : ''}</div>
-<div class="tiles">
-  <div class="tile"><div class="v">${dur(loggedToday) || '0m'}</div><div class="l">Studied today${target ? ` · target ${dur(target)}` : ''}</div>${target ? `<div class="prog" style="margin-top:6px"><div style="width:${Math.min(100, (loggedToday / target) * 100)}%"></div></div>` : ''}</div>
-  <div class="tile ${due.length ? 'warn' : ''}"><div class="v">${due.length}</div><div class="l">Concepts to review</div></div>
-  <div class="tile"><div class="v">${tasks.length ? `${doneN}/${tasks.length}` : '—'}</div><div class="l">Today's to-dos done</div></div>
-  <div class="tile"><div class="v">${week.length ? `${week.filter((t) => t.done).length}/${week.length}` : '—'}</div><div class="l">This week's to-dos</div></div>
-</div>
-<div class="row" style="margin-bottom:16px">
+<section class="hero">
+  <div><div class="eyebrow">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
+    <h1>${esc(greeting())}${D.user?.name ? ', ' + esc(D.user.name.split(' ')[0]) : ''}</h1>
+    <p>${tasks.length ? `${doneN} of ${tasks.length} to-dos done` : 'Nothing planned yet'} · ${due.length ? `${due.length} concept${due.length > 1 ? 's' : ''} to review` : 'no reviews due'}</p>
+    <div class="chipline"><span class="pillstat"><b>${week.filter((t) => t.done).length}/${week.length}</b> this week</span><span class="pillstat"><b>${D.live.length}</b> concepts</span></div></div>
+  <div class="hero-side">
+    <div class="ringbox">${ring(loggedToday / (target || 240))}<div class="mid"><b>${dur(loggedToday) || '0m'}</b><span>${target ? `of ${dur(target)}` : 'studied today'}</span></div></div>
+    ${exam ? `<div class="daycount" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days to go</span></div>` : ''}
+  </div>
+</section>
+<div class="actions">
   <a class="btn primary" href="#/timer">${running ? `⏱ Timer running · ${esc(running.text)}` : '▶ Start timer'}</a>
   ${due.length ? '<button class="btn" id="rev">Review concepts</button>' : ''}
+  <a class="btn" href="#/todo">＋ To-do</a>
 </div>
 <div class="grid g2">
 <section class="card"><div class="row between"><h2 style="margin:0">To-do today</h2><a href="#/todo" class="small">Open ›</a></div>
