@@ -12,8 +12,14 @@ const spent = (taskId) => D.studyLog.filter((l) => l.task_id === taskId).reduce(
 
 export function renderTodo(host, refresh) {
   const root = mount(host);
+  const todays = D.tasks.filter((t) => t.date === D.today);
+  const ws = weekStart(D.today);
+  const wkTasks = D.tasks.filter((t) => t.date >= ws && t.date <= addDays(ws, 6));
+  const backlog = D.tasks.filter((t) => !t.done && t.date < D.today).length;
+  const chip = (v, l) => `<span class="pillstat"><b>${v}</b> ${l}</span>`;
   root.innerHTML = `
-<div class="page-head"><div><h1>To-do</h1></div></div>
+<div class="page-head"><div><h1>To-do</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
+  <div class="row">${chip(`${todays.filter((t) => t.done).length}/${todays.length}`, 'today')}${chip(`${wkTasks.filter((t) => t.done).length}/${wkTasks.length}`, 'this week')}${backlog ? chip(backlog, 'backlog') : ''}</div></div>
 <div class="tabs" role="tablist">${[['today', 'Today'], ['week', 'Week board'], ['syllabus', 'Syllabus']].map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
 <div id="tabBody"></div>`;
   root.addEventListener('click', (e) => {
@@ -31,6 +37,14 @@ function card(t) {
   return `<div class="tcard${t.done ? ' done' : ''}" style="--h:${hue(t)}" draggable="true" data-card="${t.id}">
   <div class="top"><input type="checkbox" data-chk="${t.id}"${t.done ? ' checked' : ''} aria-label="Done: ${esc(t.title)}"><span class="tt" data-edit="${t.id}">${esc(t.title)}</span></div>
   <div class="meta"><span>${t.subject_id ? `<span class="tag">${esc(subName(t.subject_id))}</span>` : ''}${m ? ` ${dur(m)}` : ''}</span>${t.done ? '' : `<button class="go" data-play="${t.id}" title="Start the timer on this" aria-label="Start timer">▶</button>`}</div></div>`;
+}
+
+function row(t, { date = false } = {}) {
+  const m = spent(t.id);
+  return `<div class="trow${t.done ? ' done' : ''}" style="--h:${hue(t)}">
+  <input type="checkbox" data-chk="${t.id}"${t.done ? ' checked' : ''} aria-label="Done: ${esc(t.title)}">
+  <div class="tmain"><span class="tt" data-edit="${t.id}">${esc(t.title)}</span><div class="tmeta">${date ? `<span>${esc(shortDate(t.date))}</span>` : ''}${t.subject_id ? `<span class="tag">${esc(subName(t.subject_id))}</span>` : ''}${m ? `<span>${dur(m)} studied</span>` : ''}</div></div>
+  ${t.done ? '' : `<button class="go" data-play="${t.id}" title="Start the timer on this" aria-label="Start timer">▶</button>`}</div>`;
 }
 
 /** Click / change handling shared by the Today list and the board. */
@@ -112,18 +126,32 @@ function today(host, refresh) {
   const body = mount(host);
   const list = D.tasks.filter((t) => t.date === D.today);
   const missed = D.tasks.filter((t) => !t.done && t.date < D.today);
+  const soon = D.tasks.filter((t) => !t.done && t.date > D.today && t.date <= addDays(D.today, 7)).sort((x, y) => x.date.localeCompare(y.date));
   const doneN = list.filter((t) => t.done).length;
+  const open = list.filter((t) => !t.done), done = list.filter((t) => t.done);
   body.innerHTML = `
-<form id="tf" class="card" autocomplete="off">
-  <div class="row"><input name="title" required placeholder="Add a to-do for today…" maxlength="300" style="flex:1;min-width:200px" aria-label="New to-do"><select name="subject_id" aria-label="Subject" style="max-width:220px"><option value="">Subject (optional)</option>${subjectOpts()}</select><button class="btn primary">Add</button></div>
-</form>
-<section class="card"><div class="row between"><h2 style="margin:0">Today's plan</h2><span class="muted small">${list.length ? `${doneN} of ${list.length} done` : ''}</span></div>
-  ${list.length ? `<div class="prog" style="margin:10px 0 14px"><div style="width:${(doneN / list.length) * 100}%"></div></div><div class="cardlist">${list.map(card).join('')}</div>` : '<p class="muted small" style="margin:8px 0 0">Nothing planned for today yet.</p>'}</section>
-${missed.length ? `<section class="card"><div class="row between"><h2 style="margin:0">Backlog (${missed.length})</h2><button class="btn small" id="allToday">Move all to today</button></div><div class="cardlist" style="margin-top:12px">${missed.slice(-12).map(card).join('')}</div></section>` : ''}`;
+<div class="todogrid">
+<div class="todomain">
+  <form id="tf" class="card quickadd" autocomplete="off">
+    <input name="title" required placeholder="Add a to-do…" maxlength="300" aria-label="New to-do">
+    <select name="subject_id" aria-label="Subject"><option value="">Subject</option>${subjectOpts()}</select>
+    <input name="date" type="date" value="${esc(D.today)}" aria-label="Date">
+    <button class="btn primary">Add</button>
+  </form>
+  <section class="card"><div class="row between"><h2 style="margin:0">Today</h2><span class="muted small">${list.length ? `${doneN} of ${list.length} done` : ''}</span></div>
+    ${list.length ? `<div class="prog" style="margin:10px 0 4px"><div style="width:${(doneN / list.length) * 100}%"></div></div>` : ''}
+    <div class="scrollbox" style="max-height:56vh">${open.map((t) => row(t)).join('')}${done.length ? `<div class="grouplabel">Completed</div>${done.map((t) => row(t)).join('')}` : ''}${list.length ? '' : '<p class="muted small" style="margin:12px 0 0">Nothing planned for today yet — add your first to-do above.</p>'}</div></section>
+</div>
+<div class="todoside">
+  <section class="card"><div class="row between"><h2 style="margin:0">Backlog</h2>${missed.length ? '<button class="btn small" id="allToday">Move all to today</button>' : ''}</div>
+    <div class="scrollbox" style="max-height:240px;margin-top:6px">${missed.length ? [...missed].reverse().map((t) => row(t, { date: true })).join('') : '<p class="muted small" style="margin:8px 0 0">Nothing overdue. 🎉</p>'}</div></section>
+  <section class="card"><h2 style="margin-bottom:2px">Coming up</h2>
+    <div class="scrollbox" style="max-height:240px">${soon.length ? soon.map((t) => row(t, { date: true })).join('') : '<p class="muted small" style="margin:8px 0 0">Nothing scheduled in the next 7 days.</p>'}</div></section>
+</div></div>`;
   const f = $('#tf', body).elements;
   $('#tf', body).addEventListener('submit', async (e) => {
     e.preventDefault();
-    try { await api('POST', '/api/tasks', { title: f.title.value, date: D.today, kind: 'study', subject_id: f.subject_id.value }); await refresh(); } catch (ex) { fail(ex); }
+    try { await api('POST', '/api/tasks', { title: f.title.value, date: f.date.value || D.today, kind: 'study', subject_id: f.subject_id.value }); await refresh(); } catch (ex) { fail(ex); }
   });
   bindCards(body, refresh);
   $('#allToday', body)?.addEventListener('click', async () => {
@@ -143,13 +171,13 @@ function week(host, refresh) {
 <div class="row between" style="margin-bottom:12px"><div class="row"><button class="btn" id="prevW" aria-label="Previous week">‹</button><button class="btn" id="thisW">This week</button><button class="btn" id="nextW" aria-label="Next week">›</button></div><span><b>${shortDate(days[0])} – ${shortDate(days[6])}</b> <span class="muted small">${all.filter((t) => t.done).length}/${all.length} done</span></span></div>
 <p class="hint" style="margin:0 0 10px">Drag a card to another day to move it. Tap a title to edit.</p>
 <div class="board">
-  ${showBacklog ? `<div class="col backlog" data-date="${esc(D.today)}"><div class="col-head"><span>Backlog<small>Drop here to do it today</small></span><span class="n">${missed.length}</span></div>${missed.slice(-15).map(card).join('')}</div>` : ''}
+  ${showBacklog ? `<div class="col backlog" data-date="${esc(D.today)}"><div class="col-head"><span>Backlog<small>Drop here to do it today</small></span><span class="n">${missed.length}</span></div><div class="colbody">${missed.slice(-15).map(card).join('')}</div></div>` : ''}
   ${days.map((d) => {
     const ts = D.tasks.filter((t) => t.date === d);
     const logged = D.studyLog.filter((l) => l.date === d).reduce((a, l) => a + l.minutes, 0);
     return `<div class="col${d === D.today ? ' today' : ''}" data-date="${d}"><div class="col-head"><span>${dayName(d)}<small>${shortDate(d)}${logged ? ` · ${dur(logged)} studied` : ''}</small></span><span class="n">${ts.length}</span></div>
       ${D.tests.filter((t) => t.date === d).map((t) => `<div class="badge info" style="margin:0 0 8px">📝 ${esc(t.name)}</div>`).join('')}
-      ${ts.map(card).join('')}<button class="addrow" data-addcol="${d}">＋ Add task</button></div>`;
+      <div class="colbody">${ts.map(card).join('')}</div><button class="addrow" data-addcol="${d}">＋ Add task</button></div>`;
   }).join('')}
 </div>`;
   bindCards(body, refresh);
