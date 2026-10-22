@@ -247,10 +247,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(6px); anim
 
 /* ---------- calm polish (after the base rules so it wins) ---------- */
 .card, .tile, .day, .tablewrap { box-shadow: var(--shadow); }
-:root[data-theme="dark"] .btn.primary { background: #238636; border-color: rgba(240,246,252,.1); color: #fff; box-shadow: none; }
-:root[data-theme="dark"] .btn.primary:hover { background: #2ea043; filter: none; }
-:root[data-theme="dark"] .side a.nav[aria-current="page"] { background: var(--panel2); box-shadow: inset 3px 0 0 #f78166; }
-:root[data-theme="dark"] .logo { background: #238636; color: #fff; }
+:root[data-theme="dark"] .side a.nav[aria-current="page"] { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
 .tile:hover { box-shadow: var(--shadow-hover); transform: none; }
 .btn { background: var(--panel); box-shadow: 0 1px 2px rgba(44,49,66,.04); }
 .btn:hover { background: var(--panel2); }
