@@ -5,6 +5,7 @@ import { priorityScore } from '../public/shared/priority.js';
 import { summary, testStats, weekly, causeStats } from '../public/shared/analytics.js';
 import { buildPlan } from '../public/shared/planner.js';
 import { addDays, diffDays, weekStart } from '../public/shared/dates.js';
+import { diagnose, questionMetrics, trend, weeklyMinutes } from '../public/shared/diagnostics.js';
 
 const ev = (date, outcome, id) => ({ date, outcome, id });
 
@@ -254,4 +255,37 @@ test('vercel function: /api/health and API calls report a clear reason when the 
     if (saved === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = saved;
   }
+});
+
+const T = (id, date, tier, o) => ({ id, date, tier, name: `t${id}`, total_marks: 100, marks_obtained: 50, total_questions: 65, correct: 30, incorrect: 10, negative_marks: 3, ...o });
+const base = { concepts: [], subjects: [], topics: [], progress: [], studyLog: [], today: '2026-10-22', examDate: '', weekStartOf: weekStart };
+
+test('diagnostics: question metrics and attempt/accuracy findings', () => {
+  const q = questionMetrics([T(1, '2026-10-01', 'mock', { correct: 20, incorrect: 5 }), T(2, '2026-10-08', 'mock', { correct: undefined })]);
+  assert.equal(q.length, 1); // the test without counts is ignored
+  assert.equal(q[0].unattempted, 40);
+  assert.equal(q[0].accuracy, 0.8);
+  // accurate but low attempt rate
+  let d = diagnose({ ...base, tests: [T(1, '2026-10-01', 'mock', { correct: 30, incorrect: 5, total_questions: 65 })] });
+  assert.ok(d.insights.some((i) => i.level === 'warn' && /leaving marks/.test(i.title)));
+  // many attempts, poor accuracy, heavy negatives
+  d = diagnose({ ...base, tests: [T(1, '2026-10-01', 'mock', { correct: 20, incorrect: 40, total_questions: 65, marks_obtained: 20, negative_marks: 13 })] });
+  assert.ok(d.insights.some((i) => i.level === 'bad' && /shots in the dark/.test(i.title)));
+  assert.ok(d.insights.some((i) => /Negative marking/.test(i.title)));
+  // nothing recorded: a hint, not a crash
+  assert.equal(diagnose({ ...base, tests: [] }).insights[0].level, 'info');
+});
+
+test('diagnostics: trend, weekly minutes and subject findings', () => {
+  const tests = [40, 42, 44, 55, 58, 60].map((m, i) => T(i + 1, `2026-09-${String(i + 1).padStart(2, '0')}`, 'weekly', { marks_obtained: m }));
+  const t = trend(tests);
+  assert.ok(t.delta > 10);
+  assert.equal(trend(tests.slice(0, 3)), null);
+  const w = weeklyMinutes([{ date: '2026-10-22', minutes: 60 }, { date: '2026-10-19', minutes: 30 }, { date: '2026-10-12', minutes: 20 }], '2026-10-22', 3, weekStart);
+  assert.deepEqual(w.map((x) => x.min), [0, 20, 90]);
+  const subjects = [{ id: 1, name: 'ML' }, { id: 2, name: 'DB' }];
+  const concepts = [1, 2].map((i) => ({ id: i, subject_id: 1, kind: 'struggle', status: 'new', next_review: '2026-10-30' })).concat([{ id: 9, subject_id: 2, kind: 'remember', status: 'new', next_review: '2026-10-30' }]);
+  const d = diagnose({ ...base, tests: [], subjects, concepts, studyLog: [{ date: '2026-10-20', minutes: 30, subject_id: 1 }] });
+  assert.ok(d.insights.some((i) => /ML: concepts piling up/.test(i.title)));
+  assert.ok(d.insights.some((i) => /Untouched/.test(i.title) && /DB/.test(i.text)));
 });

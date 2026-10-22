@@ -1,8 +1,8 @@
 // Today: everything you need for the day on one screen, no forms.
-import { mount, D, esc, $, api, subName, topName, fail, empty, dur, pct } from './util.js';
+import { mount, D, esc, $, api, subName, fail, empty, dur, num } from './util.js';
 import { dueConcepts, startReview, KINDS } from './concepts.js';
 import { startTask, runningInfo } from './timer.js';
-import { TIERS } from './tests.js';
+import { insightCards } from './insights.js';
 import { testStats } from '/shared/analytics.js';
 import { diffDays, weekStart, addDays } from '/shared/dates.js';
 
@@ -16,16 +16,10 @@ export function renderToday(host, refresh) {
   const due = dueConcepts();
   const ws = weekStart(D.today);
   const week = D.tasks.filter((t) => t.date >= ws && t.date <= addDays(ws, 6));
-  const latest = TIERS.map(([k, l]) => {
-    const t = [...D.tests].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).find((x) => (x.tier || (x.type === 'topic' || x.type === 'subject' ? x.type : 'mock')) === k && testStats(x).scorePct != null);
-    return { l, t, p: t ? testStats(t).scorePct : null };
-  });
   const running = runningInfo();
   const studiedSet = new Set(D.progress.filter((p) => p.studied).map((p) => p.topic_id));
   const tops = D.topics.filter((t) => !t.parent_id);
-  const bySub = D.subjects.map((sb) => { const ts = tops.filter((t) => t.subject_id === sb.id); return { sb, n: ts.length, done: ts.filter((t) => studiedSet.has(t.id)).length }; }).filter((x) => x.n);
   const sylPct = tops.length ? tops.filter((t) => studiedSet.has(t.id)).length / tops.length : 0;
-  const C = 2 * Math.PI * 54;
   const byDay = new Map();
   for (const l of D.studyLog) byDay.set(l.date, (byDay.get(l.date) || 0) + l.minutes);
   const ref = target || 240;
@@ -41,33 +35,42 @@ export function renderToday(host, refresh) {
   let streak = 0;
   for (let d = byDay.has(D.today) ? D.today : addDays(D.today, -1); byDay.has(d); d = addDays(d, -1)) streak++;
 
+  const bestStreak = (() => { let best = 0, cur = 0, prev = null; for (const d of [...byDay.keys()].sort()) { cur = prev && diffDays(d, prev) === 1 ? cur + 1 : 1; best = Math.max(best, cur); prev = d; } return best; })();
+  const mocks = D.tests.filter((t) => (t.tier || (t.type === 'topic' || t.type === 'subject' ? t.type : 'mock')) === 'mock' && testStats(t).scorePct != null).sort((x, y) => y.date.localeCompare(x.date) || y.id - x.id);
+  const mock = mocks[0], mockPrev = mocks[1];
+  const mockDelta = mock && mockPrev ? Math.round((mock.marks_obtained / mock.total_marks - mockPrev.marks_obtained / mockPrev.total_marks) * 100) : null;
+  const studiedTopics = tops.filter((t) => studiedSet.has(t.id)).length;
+  const goal = target || 0;
+  const cards = insightCards();
+  const stat = (label, value, sub, bar) => `<div><div class="sl">${label}</div><div class="sv">${value}</div>${bar != null ? `<div class="prog"><div style="width:${Math.min(100, Math.max(0, bar * 100))}%"></div></div>` : ''}<div class="ss">${sub}</div></div>`;
+
   root.innerHTML = `
-<div class="page-head"><div><h1>Today</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>${exam ? `<div class="countdown" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days left</span></div>` : ''}</div>
-<div class="tiles">
-  <div class="tile"><div class="v">${dur(loggedToday) || '0m'}</div><div class="l">Studied today${target ? ` · target ${dur(target)}` : ''}</div>${target ? `<div class="prog" style="margin-top:6px"><div style="width:${Math.min(100, (loggedToday / target) * 100)}%"></div></div>` : ''}</div>
-  <div class="tile ${due.length ? 'warn' : ''}"><div class="v">${due.length}</div><div class="l">Concepts to review</div></div>
-  <div class="tile"><div class="v">${tasks.length ? `${doneN}/${tasks.length}` : '—'}</div><div class="l">Today's to-dos done</div></div>
-  <div class="tile"><div class="v">${week.length ? `${week.filter((t) => t.done).length}/${week.length}` : '—'}</div><div class="l">This week's to-dos</div></div>
+<div class="page-head"><div><h1>Today</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
+  <div class="row">${exam ? `<span class="countdown" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days to go</span></span>` : ''}<a class="btn primary" href="#/timer">${running ? `⏱ Running · ${esc(running.text)}` : '▶ Start timer'}</a></div></div>
+
+<div class="strip">
+  ${stat('Syllabus covered', `${Math.round(sylPct * 100)}%`, `${studiedTopics} of ${tops.length} topics`, sylPct)}
+  ${stat('Studied today', dur(loggedToday) || '0m', goal ? `of ${dur(goal)} goal` : 'set a goal in More', goal ? loggedToday / goal : null)}
+  ${stat('Streak', `${streak} day${streak === 1 ? '' : 's'}`, `best ${bestStreak}`, null)}
+  ${stat('Latest mock', mock ? `${num(mock.marks_obtained, 0)}<small> / ${num(mock.total_marks, 0)}</small>` : '—', mockDelta == null ? (mock ? 'first mock' : 'no mocks yet') : `${mockDelta >= 0 ? '+' : ''}${mockDelta} pts from previous`, null)}
 </div>
-<div class="row" style="margin-bottom:16px">
-  <a class="btn primary" href="#/timer">${running ? `⏱ Timer running · ${esc(running.text)}` : '▶ Start timer'}</a>
-  ${due.length ? '<button class="btn" id="rev">Review concepts</button>' : ''}
-</div>
-<section class="card"><div class="row between"><h2 style="margin:0">Consistency</h2><span class="muted small">last 26 weeks</span></div>
+
+<div class="dash">
+<section class="card s8"><div class="row between"><h2 style="margin:0">Today's plan</h2><span class="muted small">${tasks.length ? `${doneN} of ${tasks.length} done` : ''}<a href="#/todo" style="margin-left:10px">Open ›</a></span></div>
+  ${tasks.length ? `<div class="prog" style="margin:10px 0 6px"><div style="width:${(doneN / tasks.length) * 100}%"></div></div>` : ''}
+  ${tasks.length ? tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)}${t.subject_id ? `<div class="muted small">${esc(subName(t.subject_id))}</div>` : ''}</span>${t.done ? '' : `<button data-play="${t.id}" aria-label="Start timer">▶</button>`}</div>`).join('') : '<p class="muted small" style="margin:10px 0 0">Nothing planned for today. Add to-dos in the To-do tab.</p>'}</section>
+<section class="card s4"><div class="row between"><h2 style="margin:0">Due for review</h2><a href="#/concepts" class="small">Concepts ›</a></div>
+  ${due.length ? `<p class="muted small" style="margin:8px 0 0">${due.length} concept${due.length > 1 ? 's' : ''} due</p>` + due.slice(0, 4).map((m) => `<div class="plan-item"><div><b>${esc(m.title)}</b><div class="muted small">${esc(subName(m.subject_id))}</div></div><span class="badge">${KINDS[m.kind]?.[0] || ''}</span></div>`).join('') + `<div class="row" style="margin-top:10px"><button class="btn small" id="rev">Start review</button>${due.length > 4 ? `<span class="muted small">+${due.length - 4} more</span>` : ''}</div>` : `<div style="margin-top:10px">${empty(D.live.length ? 'All caught up.' : 'Add a concept you found hard.')}</div>`}</section>
+
+<section class="card s12"><div class="row between"><h2 style="margin:0">Consistency</h2><span class="muted small">last 26 weeks</span></div>
   <div class="heatcard" style="margin-top:14px"><div class="heatwrap"><div class="heatdays" aria-hidden="true"><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span>Sun</span></div><div class="heat" aria-label="Study consistency heat map">${cells.join('')}</div></div>
-    <div class="heatstats"><div><b>${dur(weekMin) || '0m'}</b><span>this week</span></div><div><b>${dur(Math.round(last30 / 30)) || '0m'}</b><span>daily avg (30d)</span></div><div><b>${streak}d</b><span>streak</span></div></div>
+    <div class="heatstats"><div><b>${dur(weekMin) || '0m'}</b><span>this week</span></div><div><b>${dur(Math.round(last30 / 30)) || '0m'}</b><span>daily avg (30d)</span></div><div><b>${week.length ? `${week.filter((t) => t.done).length}/${week.length}` : '—'}</b><span>week's to-dos</span></div></div>
     <span class="legend2">Less <i></i><i style="background:var(--heat1)"></i><i style="background:var(--heat2)"></i><i style="background:var(--heat3)"></i><i style="background:var(--heat4)"></i> More</span></div></section>
-<div class="grid g2">
-<section class="card"><div class="row between"><h2 style="margin:0">To-do today</h2><a href="#/todo" class="small">Open ›</a></div>
-  ${tasks.length ? tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)}${t.subject_id ? `<div class="muted small">${esc(subName(t.subject_id))}</div>` : ''}</span>${t.done ? '' : `<button data-play="${t.id}" aria-label="Start timer">▶</button>`}</div>`).join('') : '<p class="muted small" style="margin:8px 0 0">Nothing planned. Add to-dos in the To-do tab.</p>'}</section>
-<section class="card"><div class="row between"><h2 style="margin:0">Due for review</h2><a href="#/concepts" class="small">Concepts ›</a></div>
-  ${due.length ? due.slice(0, 6).map((m) => `<div class="plan-item"><div><b>${esc(m.title)}</b><div class="muted small">${esc(subName(m.subject_id))}${m.topic_id ? ' › ' + esc(topName(m.topic_id)) : ''}</div></div><span class="badge">${KINDS[m.kind]?.[0] || ''}</span></div>`).join('') + (due.length > 6 ? `<p class="muted small">…and ${due.length - 6} more</p>` : '') : empty(D.live.length ? 'Nothing due — all caught up.' : 'Add a concept you found hard and it will show up here.')}</section>
-</div>
-<section class="card"><div class="row between"><h2 style="margin:0">Syllabus progress</h2><a href="#/todo" class="small">Checklist ›</a></div>
-  <div class="syl" style="margin-top:14px"><div class="ringbox"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="rt" cx="60" cy="60" r="54"/><circle class="rp" cx="60" cy="60" r="54" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - sylPct)).toFixed(2)}" transform="rotate(-90 60 60)"/></svg><div class="mid"><b>${Math.round(sylPct * 100)}%</b><span>covered</span></div></div>
-    <div>${bySub.length ? bySub.map((x) => `<div class="subrow"><span>${esc(x.sb.name)}</span><div class="track"><div style="width:${(x.done / x.n) * 100}%"></div></div><span class="n">${x.done}/${x.n}</span></div>`).join('') : empty('Tick topics in the To-do ▸ Syllabus tab to see progress here.')}</div></div></section>
-<section class="card"><div class="row between"><h2 style="margin:0">Latest scores</h2><a href="#/tests" class="small">Tests ›</a></div>
-  <div class="tiles" style="margin-top:10px">${latest.map((x) => `<div class="tile"><div class="v">${pct(x.p)}</div><div class="l">${x.l}</div></div>`).join('')}</div></section>`;
+
+<div class="s7">${cards.diag}</div><div class="s5">${cards.trendCard}</div>
+<div class="s6">${cards.accCard}</div><div class="s6">${cards.hoursCard}</div>
+<div class="s6">${cards.subjCard}</div><div class="s6">${cards.stackCard}</div>
+</div>`;
 
   $('#rev', root)?.addEventListener('click', () => (startReview(), (location.hash = '#/concepts')));
   root.addEventListener('click', (e) => {

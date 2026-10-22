@@ -332,3 +332,31 @@ dialog::backdrop { background: rgba(44,49,66,.3); backdrop-filter: blur(3px); }
 .heatstats b { display: block; font-size: 1.5rem; letter-spacing: -.03em; line-height: 1.1; } .heatstats span { font-size: .76rem; color: var(--muted); }
 .legend2 { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 3px; font-size: .72rem; color: var(--muted); } .legend2 i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; background: var(--h0); }
 @media (max-width: 860px) { .heatcard { grid-template-columns: 1fr; --cs: 10px; } .heat, .heatdays { gap: 2px; } .heatstats { grid-template-columns: repeat(3, 1fr); } }
+
+/* diagnosis + stacked question bars */
+.insight { display: grid; grid-template-columns: 10px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); } .insight:first-child { border-top: 0; padding-top: 2px; }
+.insight .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 7px; background: var(--faint); }
+.insight.good .dot { background: var(--good); } .insight.warn .dot { background: var(--warn); } .insight.bad .dot { background: var(--bad); } .insight.info .dot { background: var(--accent); }
+.insight b { display: block; font-size: .93rem; } .insight p { margin: 2px 0 0; color: var(--muted); font-size: .86rem; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.metrics > div { background: var(--panel2); border-radius: 14px; padding: 10px 14px; } .metrics b { display: block; font-size: 1.4rem; letter-spacing: -.02em; } .metrics span { font-size: .74rem; color: var(--muted); }
+.stackrows { display: grid; gap: 9px; } .stackrow { display: grid; grid-template-columns: minmax(90px, 170px) 1fr 78px; gap: 12px; align-items: center; font-size: .84rem; } .stackrow .sr { text-align: right; color: var(--muted); font-size: .78rem; }
+.stackrow .sl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stack1 { display: flex; height: 22px; border-radius: 8px; overflow: hidden; background: var(--raise); }
+.stack1 i { font-style: normal; font-size: .68rem; font-weight: 650; display: grid; place-items: center; color: #fff; min-width: 0; overflow: hidden; } .stack1 i.ok { background: var(--good); } .stack1 i.no { background: var(--bad); } .stack1 i.skip { background: var(--faint); }
+.legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+@media (max-width: 860px) { .stackrow { grid-template-columns: 80px 1fr 60px; } }
+
+.grid { margin-bottom: 16px; }
+
+/* dashboard: stat strip + 12-column grid */
+.strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); margin-bottom: 16px; }
+.strip > div { padding: 18px 22px; border-left: 1px solid var(--line); } .strip > div:first-child { border-left: 0; }
+.strip .sl { font-size: .78rem; color: var(--muted); } .strip .sv { font-size: 1.9rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; margin: 2px 0 8px; } .strip .sv small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.strip .prog { margin-bottom: 6px; } .strip .ss { font-size: .78rem; color: var(--muted); }
+.dash { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; align-items: start; margin-bottom: 16px; }
+.dash > .card { margin: 0; } .dash > div > .card { margin: 0; height: 100%; }
+.dash > .s12 { grid-column: span 12; } .dash > .s8 { grid-column: span 8; } .dash > .s4 { grid-column: span 4; } .dash > .s7 { grid-column: span 7; } .dash > .s5 { grid-column: span 5; } .dash > .s6 { grid-column: span 6; }
+.dash > div.s7, .dash > div.s5, .dash > div.s6 { align-self: stretch; }
+@media (max-width: 1100px) { .dash > .s8, .dash > .s4, .dash > .s7, .dash > .s5, .dash > .s6 { grid-column: span 12; } }
+@media (max-width: 860px) { .strip { grid-template-columns: 1fr 1fr; } .strip > div:nth-child(3) { border-left: 0; } .strip > div:nth-child(n+3) { border-top: 1px solid var(--line); } .strip .sv { font-size: 1.5rem; } .strip > div { padding: 14px 16px; } }

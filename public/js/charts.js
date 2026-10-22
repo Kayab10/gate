@@ -54,3 +54,32 @@ export function sparkBars(values, color = 'var(--accent)', h = 36) {
   const w = 6, gap = 2;
   return `<svg width="${values.length * (w + gap)}" height="${h}" role="img" aria-label="Trend">${values.map((v, i) => `<rect x="${i * (w + gap)}" y="${h - (v / max) * (h - 2) - 1}" width="${w}" height="${Math.max(1, (v / max) * (h - 2))}" rx="1" fill="${color}"><title>${v}</title></rect>`).join('')}</svg>`;
 }
+
+/** Column chart. cols: [{label, value, title?}]. `line` draws a dashed reference (e.g. a weekly target). */
+export function columnChart(cols, { height = 170, line = null, fmt = (v) => v, ariaLabel = 'Column chart' } = {}) {
+  if (!cols.length) return '';
+  const W = 640, H = height, L = 38, R = 8, T = 12, B = 24;
+  const max = Math.max(...cols.map((c) => c.value), line || 0, 1) * 1.1;
+  const bw = (W - L - R) / cols.length;
+  const y = (v) => T + (1 - v / max) * (H - T - B);
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = (max * i) / 4;
+    g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${esc(fmt(max >= 10 ? Math.round(v) : Math.round(v * 10) / 10))}</text>`;
+  }
+  const bars = cols.map((c, i) => {
+    const x = L + i * bw + bw * 0.18, w = bw * 0.64, top = y(c.value);
+    return `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, H - B - top).toFixed(1)}" rx="3" fill="var(--accent)" opacity="${i === cols.length - 1 ? 1 : 0.62}"><title>${esc(c.title || `${c.label}: ${fmt(c.value)}`)}</title></rect>` +
+      (i % Math.ceil(cols.length / 8) === 0 || i === cols.length - 1 ? `<text x="${(x + w / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(c.label)}</text>` : '');
+  }).join('');
+  const ref = line ? `<line x1="${L}" x2="${W - R}" y1="${y(line)}" y2="${y(line)}" stroke="var(--good)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${W - R}" y="${y(line) - 4}" text-anchor="end" style="fill:var(--good)">target ${esc(fmt(line))}</text>` : '';
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(ariaLabel)}">${g}${bars}${ref}</svg>`;
+}
+
+/** One horizontal stacked bar per row: rows [{label, parts:[{value, cls, title}]}]. Widths are shares of each row's total. */
+export function stackRows(rows) {
+  return `<div class="stackrows">${rows.map((r) => {
+    const tot = r.parts.reduce((a, p) => a + p.value, 0) || 1;
+    return `<div class="stackrow"><span class="sl" title="${esc(r.label)}">${esc(r.label)}</span><div class="stack1">${r.parts.map((p) => (p.value ? `<i class="${p.cls}" style="width:${(p.value / tot) * 100}%" title="${esc(p.title)}">${p.value}</i>` : '')).join('')}</div><span class="sr">${esc(r.right || '')}</span></div>`;
+  }).join('')}</div>`;
+}
