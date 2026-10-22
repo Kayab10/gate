@@ -252,6 +252,8 @@ export function createStore(db) {
     async function createMistake(input, today = todayStr()) { // `today` = the browser's local date (X-Today header)
       const v = validate(MISTAKE_SPEC, input);
       v.date_encountered ||= today;
+      v.title ||= (v.question_text || '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Untitled concept';
+      v.kind ||= 'struggle';
       v.causes_secondary = (v.causes_secondary || []).filter((c) => c !== v.cause_primary);
       v.tags ||= [];
       await checkRefs(v);
@@ -396,6 +398,8 @@ export function createStore(db) {
     /* ---------- tests ---------- */
     async function saveTest(id, input, streamId) {
       const v = validate(TEST_SPEC, input, { partial: !!id });
+      if (v.tier) v.type = v.tier === 'weekly' ? 'practice' : v.tier; // keep the older "type" in step with the tier
+      if (v.url && !/^https?:\/\//i.test(v.url)) throw bad('url', 'must start with http:// or https://');
       if (!id) {
         v.stream_id = await needStream(streamId);
         v.user_id = uid;
@@ -466,6 +470,7 @@ export function createStore(db) {
       v.stream_id = await needStream(streamId);
       v.user_id = uid;
       if (v.subject_id != null && !(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
+      if (v.task_id != null && !(await exists('SELECT 1 x FROM tasks WHERE id=? AND user_id=?', v.task_id, uid))) throw bad('task_id', 'unknown task');
       const cols = Object.keys(v);
       const id = await ins(`INSERT INTO study_log (${cols.join(',')}, created_at) VALUES (${cols.map(() => '?').join(',')}, ?)`, ...cols.map((k) => v[k]), now());
       return strip(await one('SELECT * FROM study_log WHERE id=? AND user_id=?', id, uid));

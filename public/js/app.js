@@ -1,48 +1,45 @@
-import { D, api, load, $, esc, fail, modalOpen, closeAllModals, mount, pickStream } from './util.js';
-import { openMistakeForm, mistakeFormHtml, bindMistakeForm } from './form.js';
-import { renderDashboard } from './dashboard.js';
-import { renderMistakes } from './mistakes.js';
-import { renderReview, resetReviewDate } from './review.js';
+import { D, api, load, $, esc, fail, modalOpen, closeAllModals, mount, pickStream, openModal } from './util.js';
+import { renderToday } from './today.js';
+import { renderTodo } from './todo.js';
+import { renderTimer, runningInfo, onTick } from './timer.js';
+import { renderConcepts, openConceptForm, dueConcepts } from './concepts.js';
 import { renderTests } from './tests.js';
-import { renderSchedule } from './schedule.js';
-import { renderAnalytics } from './analytics.js';
 import { renderSettings } from './settings.js';
 import { diffDays } from '/shared/dates.js';
 
+// [route, label, render, shows in the bottom bar]
 const ROUTES = [
-  ['dashboard', 'Dashboard', renderDashboard],
-  ['add', 'Add mistake', renderAdd],
-  ['mistakes', 'All mistakes', renderMistakes],
-  ['review', 'Review queue', renderReview],
-  ['tests', 'Tests & mocks', renderTests],
-  ['schedule', 'Schedule & tracker', renderSchedule],
-  ['analytics', 'Subject analytics', renderAnalytics],
-  ['settings', 'Settings', renderSettings],
+  ['today', 'Today', renderToday],
+  ['todo', 'To-do', renderTodo],
+  ['timer', 'Timer', renderTimer],
+  ['concepts', 'Concepts', renderConcepts],
+  ['tests', 'Tests', renderTests],
+  ['more', 'More', renderMore],
 ];
 
 const ICONS = {
-  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
-  add: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
-  mistakes: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-  review: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  today: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  todo: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
+  concepts: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"/>',
   tests: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 13l2 2 4-4"/>',
-  schedule: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-  analytics: '<path d="M3 3v18h18"/><path d="M8 16v-4M13 16V8M18 16v-7"/>',
-  settings: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
 };
 
 let cleanup = null;
 const main = $('#main');
 
 function current() {
-  const name = location.hash.replace(/^#\//, '') || 'dashboard';
+  const name = location.hash.replace(/^#\//, '') || 'today';
   return ROUTES.find((r) => r[0] === name) || ROUTES[0];
 }
 
 function drawNav() {
-  const dueN = D.live.filter((m) => m.status !== 'mastered' && m.next_review <= D.today).length;
+  const dueN = dueConcepts().length;
   const cur = current()[0];
-  $('#navList').innerHTML = ROUTES.map(([k, label]) => `<li><a class="nav" href="#/${k}"${k === cur ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg><span class="lbl">${label}</span>${k === 'review' && dueN ? `<span class="pill" aria-label="${dueN} due">${dueN}</span>` : ''}</a></li>`).join('');
+  const item = ([k, label]) => `<a class="nav" href="#/${k}"${k === cur ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg><span class="lbl">${label}</span>${k === 'concepts' && dueN ? `<span class="pill" aria-label="${dueN} due">${dueN}</span>` : ''}</a>`;
+  $('#navList').innerHTML = ROUTES.map((r) => `<li>${item(r)}</li>`).join('');
+  $('#bottomNav').innerHTML = ROUTES.map(item).join('');
   $('#topTitle').textContent = current()[1];
   $('#userLine').textContent = D.user?.name || D.user?.email || '';
   $('#streamBtn').innerHTML = `<span><b>${esc(D.stream.code)}</b> · ${esc(D.stream.name)}</span><span>⇄</span>`;
@@ -50,11 +47,13 @@ function drawNav() {
   $('#examCount').textContent = exam ? `${Math.max(0, diffDays(exam, D.today))} days to exam` : '';
 }
 
-function renderAdd(host, refresh) {
+/** More: branch, theme, then the settings page. */
+function renderMore(host, refresh) {
   const root = mount(host);
-  root.innerHTML = `<div class="page-head"><div><h1>Add mistake</h1><p>Only <b>subject</b> and <b>primary cause</b> are required — fill in the rest now or later. <kbd>Ctrl+Enter</kbd> saves and keeps your context for the next one.</p></div></div><div class="card">${mistakeFormHtml({}, { detailed: true })}</div>`;
-  // "save & add another" keeps the form (and its sticky context); just refresh the data behind it
-  bindMistakeForm(root, { onSaved: (saved, act) => (act === 'again' ? load().then(drawNav) : refresh()) });
+  root.innerHTML = `<div class="card"><div class="row"><button class="btn" id="moreStream">⇄ Branch: <b>${esc(D.stream.code)}</b></button><button class="btn" id="moreTheme">◐ Theme</button></div><p class="muted small" style="margin:8px 0 0">${esc(D.user?.name || D.user?.email || '')}</p></div><div id="settingsHost"></div>`;
+  $('#moreStream', root).addEventListener('click', () => $('#streamBtn').click());
+  $('#moreTheme', root).addEventListener('click', () => $('#themeBtn').click());
+  return renderSettings($('#settingsHost', root), refresh);
 }
 
 /** reload=false re-renders from the data already loaded */
@@ -63,8 +62,9 @@ export async function refresh(reload = true) {
   try {
     if (reload) await load();
     drawNav();
+    drawTimerBar();
     cleanup?.();
-    const [name, , fn] = current();
+    const [, , fn] = current();
     cleanup = fn(main, refresh) || null;
     window.scrollTo(0, y);
   } catch (e) {
@@ -77,11 +77,26 @@ export async function refresh(reload = true) {
   }
 }
 
+// ---- running-timer bar: visible on every page except the Timer page itself ----
+function drawTimerBar() {
+  const bar = $('#timerBar');
+  const info = D.loaded ? runningInfo() : null;
+  if (!info || current()[0] === 'timer') return void (bar.hidden = true);
+  bar.hidden = false;
+  bar.innerHTML = `<a href="#/timer"><b data-t>${esc(info.text)}</b> <span>${esc(info.label)}${info.task ? ' · ' + esc(info.task.title) : ''}</span></a>`;
+}
+onTick(() => {
+  const info = D.loaded ? runningInfo() : null;
+  const bar = $('#timerBar');
+  if (!info || current()[0] === 'timer') return void (bar.hidden = true);
+  if (bar.hidden || !bar.querySelector('[data-t]')) return drawTimerBar();
+  bar.querySelector('[data-t]').textContent = info.text;
+});
+
 const animateIn = () => (main.classList.add('enter'), setTimeout(() => main.classList.remove('enter'), 400));
 window.addEventListener('hashchange', () => {
   animateIn();
   closeAllModals();
-  resetReviewDate();
   window.scrollTo(0, 0);
   refresh(true);
 });
@@ -91,18 +106,33 @@ $('#streamBtn').addEventListener('click', async () => {
   try {
     const r = await api('GET', '/api/streams');
     if (await pickStream(r.streams, r.available, { dismissable: true })) {
-      location.hash = '#/dashboard';
+      location.hash = '#/today';
       await refresh();
     }
   } catch (e) {
     fail(e);
   }
 });
-$('#quickAdd').addEventListener('click', () => openMistakeForm({ onSaved: () => refresh() }));
+
+// ---- quick add: concept, test score or to-do ----
+function quickAdd() {
+  if (modalOpen()) return;
+  const m = openModal('Quick add', `<div class="stack"><button class="btn wide" data-q="concept">💡 Concept</button><button class="btn wide" data-q="test">📝 Test score</button><button class="btn wide" data-q="todo">✅ To-do</button></div>`);
+  m.dlg.addEventListener('click', (e) => {
+    const q = e.target.closest('[data-q]')?.dataset.q;
+    if (!q) return;
+    m.close();
+    if (q === 'concept') return openConceptForm({ onSaved: () => refresh() });
+    location.hash = q === 'test' ? '#/tests' : '#/todo';
+    setTimeout(() => $(q === 'test' ? '#qt [name=marks_obtained]' : '#tf [name=title]')?.focus(), 450);
+  });
+}
+$('#quickAdd').addEventListener('click', quickAdd);
+$('#topAdd').addEventListener('click', quickAdd);
 document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.target.matches?.('input, textarea, select') && !modalOpen()) {
     e.preventDefault();
-    openMistakeForm({ onSaved: () => refresh() });
+    quickAdd();
   }
 });
 const themeMeta = () => document.querySelector('meta[name=theme-color]')?.setAttribute('content', document.documentElement.dataset.theme === 'light' ? '#eeeff3' : '#000000');
@@ -114,30 +144,6 @@ $('#themeBtn').addEventListener('click', () => {
   themeMeta();
   try { localStorage.setItem('theme', t); } catch {}
 });
-
-// ---- mobile: slide-in menu ----
-const setMenu = (open) => {
-  document.body.classList.toggle('menu-open', open);
-  $('#menuBtn').setAttribute('aria-expanded', String(open));
-};
-$('#menuBtn').addEventListener('click', () => setMenu(!document.body.classList.contains('menu-open')));
-$('#scrim').addEventListener('click', () => setMenu(false));
-$('#navList').addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
-window.addEventListener('hashchange', () => setMenu(false));
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
-$('#topAdd').addEventListener('click', () => openMistakeForm({ onSaved: () => refresh() }));
-$('#quickAdd').addEventListener('click', () => setMenu(false));
-// swipe: right from the left edge opens, left closes
-let sx = null, sy = null;
-document.addEventListener('touchstart', (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, { passive: true });
-document.addEventListener('touchend', (e) => {
-  if (sx == null) return;
-  const t = e.changedTouches[0], dx = t.clientX - sx, dy = Math.abs(t.clientY - sy);
-  const open = document.body.classList.contains('menu-open');
-  if (dy < 40 && !open && sx < 24 && dx > 70) setMenu(true);
-  else if (dy < 40 && open && dx < -60) setMenu(false);
-  sx = null;
-}, { passive: true });
 
 // ---- mobile: wide tables become stacked cards (labels come from the header cells) ----
 function labelTables() {
@@ -162,4 +168,3 @@ lastDay = new Date().toDateString();
 animateIn();
 refresh().catch(() => {});
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-

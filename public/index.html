@@ -20,15 +20,14 @@
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
-  <button class="iconbtn" id="menuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="sidenav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <span class="logo" aria-hidden="true">✓</span>
   <div class="topbar-title" id="topTitle">GATE</div>
-  <button class="iconbtn accent" id="topAdd" aria-label="Quick add a mistake"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="iconbtn accent" id="topAdd" aria-label="Quick add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
 </header>
-<div class="scrim" id="scrim"></div>
 <div class="shell">
   <nav class="side" id="sidenav" aria-label="Main">
     <div class="brand"><span class="logo" aria-hidden="true">✓</span> GATE <small>2027</small></div>
-    <button class="btn primary wide" id="quickAdd" title="Quick add a mistake (press N)">＋ Quick add <kbd>N</kbd></button>
+    <button class="btn primary wide" id="quickAdd" title="Quick add (press N)">＋ Quick add <kbd>N</kbd></button>
     <ul id="navList"></ul>
     <div class="side-foot">
       <button class="streamswitch" id="streamBtn" title="Switch what you are studying"></button>
@@ -39,6 +38,8 @@
   </nav>
   <main id="main" tabindex="-1"></main>
 </div>
+<div id="timerBar" class="timerbar" hidden></div>
+<nav class="bottomnav" id="bottomNav" aria-label="Main"></nav>
 <div id="toasts" aria-live="polite"></div>
 <script type="module" src="/js/app.js"></script>
 </body>

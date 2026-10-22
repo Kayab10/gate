@@ -1,6 +1,6 @@
-# GATE 2027 Mistake Tracker
+# GATE 2027 Tracker
 
-A mistake tracker, spaced-review scheduler, test log and study planner. It is a **PWA** (installable on your phone) that runs on
+A concept tracker with spaced review, test-score log, timer and to-do list. It is a **PWA** (installable on your phone) that runs on
 **Vercel** with data in **Supabase Postgres**, so your phone and laptop always show the same data.
 **Accounts:** sign up with email + password and choose your branch (**DA** or **ME**); you stay signed in on that device for a year. Everyone's data — syllabus, mistakes, tests, schedule, settings, screenshots — is completely separate (each account gets its own copy of the syllabus for its branch, and every query is scoped to the signed-in user). You can add the other branch to your account later.
 
@@ -11,18 +11,16 @@ A mistake tracker, spaced-review scheduler, test log and study planner. It is a 
 
 | Page | What it does |
 |---|---|
-| Dashboard | Summary metrics, **What should I study today?** (fits your time budget), today's schedule, trends |
-| Add mistake | Only subject + primary cause required. `Ctrl+Enter` = save & add another (keeps subject/test context). `N` anywhere = quick-add popup. Paste a screenshot with Ctrl+V |
-| All mistakes | Search, 12+ filters, saved filters, sorting, bulk actions, detail view with priority breakdown and review history |
-| Review queue | Overdue / due / upcoming. Solution hidden until revealed; keys `Space` (reveal) and `1`–`5` (outcome) |
-| Tests & mocks | Scores, accuracy (attempted vs all), per-subject breakdown, linked mistakes, mock-review filters, quick "add mistake from this test" |
-| Schedule & tracker | Weekly planner (repeat weekly, missed-task rollover), study-time log + consistency calendar, syllabus checklist (studied / revisions / PYQs) |
-| Subject analytics | Per-subject and root-cause analysis, weekly trends, error rate per attempted question |
-| Settings | Exam date, review intervals, priority weights, mastery thresholds, plan time estimates, syllabus and root-cause editors |
+| Today | Days left, time studied, concepts due for review, today's to-dos, latest score per tier |
+| To-do | Today / This week task lists (▶ starts the timer on a task, repeat weekly, missed tasks roll over), plus the syllabus checklist |
+| Timer | **Pomodoro or stopwatch**; time is logged automatically (optionally against a to-do). Study log, weekly totals, consistency calendar. A running timer shows in a bar on every page |
+| Concepts | Write a *concept* instead of a question: a title, a tag (🔴 struggled with / 🟡 must remember / 🟢 new in an exam), subject, optional note. Concepts are resurfaced on the review schedule below |
+| Tests | Enter marks only. Tiers: weekly quiz → topic-wise → subject-wise → full mock, with an optional platform and link. Latest / best / last-3 average per tier and a progress chart |
+| More | Branch switch, theme, settings (exam date, review intervals, syllabus editor) |
 
 ## How the algorithms work
 
-**Review scheduling** (`shared/srs.js`). Default intervals 1, 3, 7, 14, 30 days, each measured from the *actual date of the previous review* (so overdue reviews don't compress the spacing). A mistake's state is always **re-derived by replaying its review events**, which is why editing dates, undoing a review or changing intervals can never leave it inconsistent.
+**Review scheduling** (`shared/srs.js`). Default intervals 1, 3, 7, 14, 30 days, each measured from the *actual date of the previous review* (so overdue reviews don't compress the spacing). A concept's state is always **re-derived by replaying its review events**, which is why editing dates, undoing a review or changing intervals can never leave it inconsistent.
 - *Solved independently* → next interval; streak +1. **Mastered after N consecutive independent solves** (default 4) — then only maintenance spot-checks every 60 days.
 - *Partial* → repeat the same interval, streak reset. *Hint* → one step back, streak reset.
 - *Failed / couldn't remember concept* → back to step 0, retry after 1 day. A mastered item becomes **Reopened**.

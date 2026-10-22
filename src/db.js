@@ -114,6 +114,17 @@ export const MIGRATIONS = [
   DELETE FROM study_log WHERE note = 'sample';
   DELETE FROM topic_progress WHERE notes = 'sample';
   `,
+  // v4: simplified tracker. A mistake becomes a "concept" (title + tag + note; no cause needed), tests get a tier and link,
+  // and a study-log entry can point at the to-do it was spent on. Existing mistakes become concepts tagged "struggle".
+  `
+  ALTER TABLE mistakes ALTER COLUMN cause_primary DROP NOT NULL;
+  ALTER TABLE mistakes ADD COLUMN title TEXT, ADD COLUMN kind TEXT NOT NULL DEFAULT 'struggle', ADD COLUMN note TEXT;
+  UPDATE mistakes SET title = LEFT(COALESCE(NULLIF(TRIM(question_text), ''), NULLIF(TRIM(lesson), ''), 'Old mistake #' || id), 120),
+    note = COALESCE(NULLIF(TRIM(lesson), ''), NULLIF(TRIM(solution), ''));
+  ALTER TABLE tests ADD COLUMN tier TEXT, ADD COLUMN url TEXT;
+  UPDATE tests SET tier = CASE type WHEN 'topic' THEN 'topic' WHEN 'subject' THEN 'subject' ELSE 'mock' END;
+  ALTER TABLE study_log ADD COLUMN task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL;
+  `,
 ];
 
 /* ---------------------------- adapters ---------------------------- */

@@ -89,9 +89,26 @@ test('create / edit / duplicate / archive / delete a mistake with validation', a
   assert.equal(r.body.next_review, D(1));
   assert.equal(r.body.user_id, undefined);
 
+  // a concept needs only a subject; the title falls back and the tag defaults to "struggle"
   r = await call('POST', '/api/mistakes', { subject_id: th.id });
-  assert.equal(r.status, 400);
-  assert.match(r.body.error, /cause_primary/);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.kind, 'struggle');
+  assert.equal(r.body.title, 'Untitled concept');
+  r = await call('POST', '/api/mistakes', { subject_id: th.id, title: 'Carnot cycle', kind: 'new', note: 'efficiency = 1 - Tc/Th' });
+  assert.equal(r.body.title, 'Carnot cycle');
+  assert.equal(r.body.kind, 'new');
+  assert.equal((await call('POST', '/api/mistakes', { subject_id: th.id, kind: 'bogus' })).status, 400);
+  assert.equal((await call('POST', '/api/mistakes', { subject_id: th.id })).body.cause_primary, null);
+  // tests carry a tier and an optional link; the study log can point at a to-do
+  const tt = await call('POST', '/api/tests', { name: 'Weekly 1', date: D(0), tier: 'weekly', marks_obtained: 12, total_marks: 20, url: 'https://example.com/q' });
+  assert.equal(tt.status, 200);
+  assert.equal(tt.body.tier, 'weekly');
+  assert.equal((await call('POST', '/api/tests', { name: 'x', date: D(0), tier: 'nope' })).status, 400);
+  assert.equal((await call('POST', '/api/tests', { name: 'x', date: D(0), url: 'javascript:alert(1)' })).status, 400);
+  const tk = await call('POST', '/api/tasks', { title: 'Revise SVM', date: D(0) });
+  const lg = await call('POST', '/api/log', { date: D(0), minutes: 25, task_id: tk.body.id });
+  assert.equal(lg.body.task_id, tk.body.id);
+  assert.equal((await call('POST', '/api/log', { date: D(0), minutes: 5, task_id: 999999 })).status, 400);
   assert.equal((await call('POST', '/api/mistakes', { subject_id: th.id, cause_primary: cause, confidence: 9 })).status, 400);
   assert.equal((await call('POST', '/api/mistakes', { subject_id: 999999, cause_primary: cause })).status, 400);
   const other = boot0.topics.find((t) => t.subject_id !== th.id);
@@ -573,7 +590,10 @@ test('migration v3 removes leftover demo rows and keeps real ones', async () => 
   await ctx.app.close();
   // pretend the database is still at v2, then start the app again
   const db = await pgliteAdapter(path.join(dir, 'pg'));
-  await db.query('DELETE FROM schema_migrations WHERE version = 3');
+  await db.query('DELETE FROM schema_migrations WHERE version >= 3');
+  await db.query('ALTER TABLE mistakes DROP COLUMN title, DROP COLUMN kind, DROP COLUMN note, ALTER COLUMN cause_primary SET NOT NULL');
+  await db.query('ALTER TABLE tests DROP COLUMN tier, DROP COLUMN url');
+  await db.query('ALTER TABLE study_log DROP COLUMN task_id');
   await db.close();
   ctx = await boot(dir, { noUser: true });
   const c = ctx.makeClient();
@@ -582,6 +602,8 @@ test('migration v3 removes leftover demo rows and keeps real ones', async () => 
   c.useStream(st);
   const s = (await c.call('GET', '/api/bootstrap')).body;
   assert.deepEqual(s.mistakes.map((m) => m.id), [real.id]);
+  assert.equal(s.mistakes[0].title, 'mine'); // v4 turns an old mistake into a concept titled from its question
+  assert.equal(s.mistakes[0].kind, 'struggle');
   assert.ok(!s.mistakes.some((m) => m.id === demo.id));
   assert.deepEqual(s.tasks.map((t) => t.title), ['Real task']);
   assert.deepEqual(s.studyLog.map((l) => l.note), ['mine']);

@@ -207,18 +207,13 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(6px); anim
 /* ---------- responsive ---------- */
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .week { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .topbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 60; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top)); background: var(--bg); border-bottom: 1px solid var(--line); }
   :root[data-theme="light"] .topbar { background: rgba(238,239,243,.92); backdrop-filter: blur(12px); }
   .topbar-title { flex: 1; font-weight: 650; font-size: 1.05rem; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .side { position: fixed; top: 0; left: 0; bottom: 0; height: auto; width: min(300px, 84vw); z-index: 100; transform: translateX(-102%); transition: transform 260ms var(--ease), visibility 260ms; padding: 18px 14px; padding-top: calc(18px + env(safe-area-inset-top)); background: var(--panel); border-right: 1px solid var(--line2); box-shadow: 0 0 60px rgba(0,0,0,.5); visibility: hidden; }
-  :root[data-theme="light"] .side { background: #fff; }
-  body.menu-open .side { transform: none; visibility: visible; }
-  .scrim { display: block; position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.6); opacity: 0; pointer-events: none; transition: opacity 220ms; }
-  body.menu-open .scrim { opacity: 1; pointer-events: auto; } body.menu-open { overflow: hidden; }
-  .side a.nav { padding: 13px 12px; font-size: 1rem; }
-  .side-foot { padding-bottom: env(safe-area-inset-bottom); }
-  main { padding: 18px 14px calc(80px + env(safe-area-inset-bottom)); }
+  .side { display: none; }
+  .topbar .logo { flex: none; }
+  main { padding: 18px 14px calc(96px + env(safe-area-inset-bottom)); }
   h1 { font-size: 1.4rem; } .page-head { margin-bottom: 16px; } .page-head > .btn { width: 100%; }
   .card { padding: 14px; } .tiles { gap: 10px; } .tile { padding: 12px; } .tile .v { font-size: 1.6rem; }
   .btn { min-height: 42px; } .btn.small { min-height: 34px; }
@@ -241,6 +236,18 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(6px); anim
   table.cards td:not([data-l])::before { display: none; } table.cards td:not([data-l]) { grid-column: 1 / -1; }
   table.cards td.clip, table.cards td.small { grid-column: 1 / -1; white-space: normal; max-width: none; }
 }
+/* ---------- bottom navigation + running-timer bar ---------- */
+.bottomnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line2); justify-content: space-around; }
+.bottomnav a.nav { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; padding: 6px 2px; border-radius: var(--r2); color: var(--muted); text-decoration: none; font-size: .68rem; font-weight: 550; }
+.bottomnav a.nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bottomnav a.nav[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+.bottomnav .pill { position: absolute; top: 0; right: calc(50% - 22px); }
+.timerbar { position: fixed; z-index: 69; left: 12px; right: 12px; bottom: 16px; }
+.timerbar a { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-size: .9rem; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.timerbar b { font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+.clipline { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (min-width: 861px) { .bottomnav { display: none; } .timerbar { left: auto; right: 24px; bottom: 24px; } }
+@media (max-width: 860px) { .timerbar { bottom: calc(76px + env(safe-area-inset-bottom)); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 
 /* ---------- login ---------- */

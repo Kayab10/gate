@@ -69,6 +69,8 @@ export function validate(spec, input, { partial = false } = {}) {
 
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
 export const TEST_TYPES = ['topic', 'subject', 'mock', 'pyq', 'practice'];
+export const TEST_TIERS = ['weekly', 'topic', 'subject', 'mock'];
+export const CONCEPT_KINDS = ['struggle', 'remember', 'new'];
 
 export const MISTAKE_SPEC = {
   date_encountered: { t: 'date' },
@@ -87,7 +89,10 @@ export const MISTAKE_SPEC = {
   my_answer: { t: 'str' },
   correct_answer: { t: 'str' },
   solution: { t: 'str' },
-  cause_primary: { t: 'int', req: true },
+  cause_primary: { t: 'int' },
+  title: { t: 'str', len: 200 },
+  kind: { t: 'enum', values: CONCEPT_KINDS },
+  note: { t: 'str' },
   causes_secondary: { t: 'intarr' },
   difficulty: { t: 'enum', values: DIFFICULTIES },
   confidence: { t: 'int', min: 1, max: 5 },
@@ -107,6 +112,8 @@ export const TEST_SPEC = {
   provider: { t: 'str', len: 200 },
   date: { t: 'date', req: true },
   type: { t: 'enum', values: TEST_TYPES },
+  tier: { t: 'enum', values: TEST_TIERS },
+  url: { t: 'str', len: 1000 },
   duration_min: { t: 'num', min: 0, max: 1000 },
   total_questions: { t: 'int', min: 0, max: 1000 },
   total_marks: { t: 'num', min: 0, max: 10000 },
@@ -134,6 +141,7 @@ export const TASK_SPEC = {
 export const LOG_SPEC = {
   date: { t: 'date', req: true },
   subject_id: { t: 'int' },
+  task_id: { t: 'int' },
   minutes: { t: 'int', req: true, min: 1, max: 1440 },
   activity: { t: 'str', len: 100 },
   note: { t: 'str', len: 1000 },
