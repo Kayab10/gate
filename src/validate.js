@@ -113,6 +113,7 @@ export const TEST_SPEC = {
   date: { t: 'date', req: true },
   type: { t: 'enum', values: TEST_TYPES },
   tier: { t: 'enum', values: TEST_TIERS },
+  subject_id: { t: 'int' },
   url: { t: 'str', len: 1000 },
   duration_min: { t: 'num', min: 0, max: 1000 },
   total_questions: { t: 'int', min: 0, max: 1000 },

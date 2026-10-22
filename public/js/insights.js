@@ -1,7 +1,7 @@
 // Dashboard diagnostics: written findings plus the charts behind them.
 import { D, esc, dur, pct, empty } from './util.js';
 import { lineChart, columnChart, stackRows, barList, COLORS } from './charts.js';
-import { diagnose, questionMetrics, weeklyMinutes, subjectFocus, tierOf } from '/shared/diagnostics.js';
+import { diagnose, questionMetrics, weeklyMinutes, subjectFocus, subjectScores, tierOf } from '/shared/diagnostics.js';
 import { testStats } from '/shared/analytics.js';
 import { weekStart, shortDate } from '/shared/dates.js';
 
@@ -46,8 +46,10 @@ export function insightCards() {
   const focus = subjectFocus({ subjects: D.subjects, topics: D.topics, progress: D.progress, concepts: D.live, studyLog: D.studyLog, today: D.today, days: 30 });
   const byTime = focus.filter((f) => f.minutes).sort((a, b) => b.minutes - a.minutes).slice(0, 7);
   const byStruggle = focus.filter((f) => f.openStruggle).sort((a, b) => b.openStruggle - a.openStruggle).slice(0, 7);
-  const subjCard = `<section class="card"><h2>Time vs trouble spots</h2>
-    <h3 class="muted small" style="font-weight:600;margin:0 0 4px">Study time, last 30 days</h3>${byTime.length ? barList(byTime.map((f) => ({ label: f.subject.name, value: f.minutes, text: dur(f.minutes) }))) : empty('No time logged against a subject.')}
+  const bySubj = subjectScores(D.tests, D.subjects);
+  const subjCard = `<section class="card"><h2>Subjects</h2>
+    <h3 class="muted small" style="font-weight:600;margin:0 0 4px">Average test score (weekly, topic, subject tests)</h3>${bySubj.length ? barList(bySubj.map((x) => ({ label: x.subject.name, value: Math.round(x.avg * 100), text: `${Math.round(x.avg * 100)}% · ${x.n}`, cls: x.avg < 0.5 ? 'bad' : x.avg < 0.7 ? 'warn' : 'good' })), 100) : empty('Pick a subject on weekly, topic and subject tests to see this.')}
+    <h3 class="muted small" style="font-weight:600;margin:14px 0 4px">Study time, last 30 days</h3>${byTime.length ? barList(byTime.map((f) => ({ label: f.subject.name, value: f.minutes, text: dur(f.minutes) }))) : empty('No time logged against a subject.')}
     <h3 class="muted small" style="font-weight:600;margin:14px 0 4px">Open “struggled with” concepts</h3>${byStruggle.length ? barList(byStruggle.map((f) => ({ label: f.subject.name, value: f.openStruggle, text: String(f.openStruggle), cls: 'warn' }))) : empty('No open struggle concepts.')}</section>`;
 
   const lastQ = q.slice(-8);

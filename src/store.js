@@ -400,6 +400,8 @@ export function createStore(db) {
       const v = validate(TEST_SPEC, input, { partial: !!id });
       if (v.tier) v.type = v.tier === 'weekly' ? 'practice' : v.tier; // keep the older "type" in step with the tier
       if (v.url && !/^https?:\/\//i.test(v.url)) throw bad('url', 'must start with http:// or https://');
+      if (v.tier === 'mock') v.subject_id = null; // a full mock covers everything
+      if (v.subject_id != null && !(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
       if (!id) {
         v.stream_id = await needStream(streamId);
         v.user_id = uid;

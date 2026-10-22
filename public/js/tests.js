@@ -1,5 +1,5 @@
 // Tests: marks plus the question breakdown. Four tiers (weekly quiz → topic → subject → full mock) and two series.
-import { mount, D, esc, $, api, opts, toast, fail, openModal, confirmDialog, pct, num, empty } from './util.js';
+import { mount, D, esc, $, api, opts, subjectOpts, subName, toast, fail, openModal, confirmDialog, pct, num, empty } from './util.js';
 import { testStats } from '/shared/analytics.js';
 import { todayStr, shortDate } from '/shared/dates.js';
 import { lineChart, COLORS } from './charts.js';
@@ -13,6 +13,8 @@ const scoreOf = (t) => testStats(t).scorePct;
 
 let tab = '';
 let series = '';
+let subjectF = '';
+export const SUBJECT_TIERS = ['weekly', 'topic', 'subject']; // these belong to a subject; full mocks do not
 let lastSeries = '';
 
 /** Shared field block for the quick-add form and the edit dialog. */
@@ -21,6 +23,7 @@ function fieldsHtml(x = {}) {
   const f = (name, label, type = 'number', extra = '') => `<label><span class="lab">${label}</span><input name="${name}" type="${type}" value="${esc(x[name] ?? '')}" ${extra}></label>`;
   return `<div class="fgrid">
     <label><span class="lab">Series *</span><select name="provider" required>${opts([...SERIES, ...prov].map((p) => [p, p]), x.provider || lastSeries || SERIES[0])}</select></label>
+    <label data-subject><span class="lab">Subject *</span><select name="subject_id"><option value="">Select…</option>${subjectOpts(x.subject_id)}</select></label>
     <label><span class="lab">Name (optional)</span><input name="name" maxlength="300" value="${esc(x.name)}" placeholder="e.g. Weekly Quiz 12"></label>
     <label><span class="lab">Date *</span><input name="date" type="date" value="${esc(x.date || todayStr())}" required></label>
     ${f('marks_obtained', 'Marks obtained *', 'number', 'step="0.01" required')}
@@ -58,9 +61,19 @@ function bindCalc(form) {
   calc();
 }
 
+/** Show the subject field only for subject-based tiers. `tierEl` is the tier select (edit dialog) or the checked radio group (quick add). */
+function bindTier(form) {
+  const label = form.querySelector('[data-subject]'), sel = form.elements.subject_id;
+  const tier = () => form.querySelector('[name=tier]:checked')?.value || form.elements.tier?.value;
+  const sync = () => { const on = SUBJECT_TIERS.includes(tier()); label.hidden = !on; sel.required = on; };
+  form.addEventListener('change', (e) => { if (e.target.name === 'tier') sync(); });
+  sync();
+}
+
 const payload = (form, extra = {}) => {
   const f = form.elements;
   const p = { ...extra };
+  p.subject_id = SUBJECT_TIERS.includes(p.tier) ? f.subject_id.value : '';
   for (const k of ['name', 'date', 'provider', 'marks_obtained', 'total_marks', 'negative_marks', 'total_questions', 'correct', 'incorrect', 'unattempted']) p[k] = f[k].value;
   return p;
 };
@@ -69,7 +82,7 @@ export function renderTests(host, refresh) {
   const root = mount(host);
   const everything = [...D.tests].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
   const providers = [...new Set([...SERIES, ...D.tests.map((t) => t.provider).filter(Boolean)])];
-  const all = series ? everything.filter((t) => (t.provider || '') === series) : everything;
+  const all = everything.filter((t) => (!series || (t.provider || '') === series) && (!subjectF || t.subject_id === Number(subjectF)));
   const shown = tab ? all.filter((t) => tierOf(t) === tab) : all;
   const scored = (list) => list.filter((t) => scoreOf(t) != null);
   const tierStats = TIERS.map(([k, l]) => {
@@ -83,7 +96,8 @@ export function renderTests(host, refresh) {
 
   root.innerHTML = `
 <div class="page-head"><div><h1>Tests</h1><p>${all.length} recorded${series ? ` · ${esc(series)}` : ''}</p></div>
-  <label class="row gap-s"><span class="muted small">Series</span><select id="fseries" aria-label="Filter by series"><option value="">All series</option>${opts(providers.map((p) => [p, p]), series)}</select></label></div>
+  <div class="row"><label class="row gap-s"><span class="muted small">Subject</span><select id="fsubject" aria-label="Filter by subject"><option value="">All subjects</option>${subjectOpts(subjectF)}</select></label>
+  <label class="row gap-s"><span class="muted small">Series</span><select id="fseries" aria-label="Filter by series"><option value="">All series</option>${opts(providers.map((p) => [p, p]), series)}</select></label></div></div>
 <form id="qt" class="card" autocomplete="off">
   <div class="chips" role="radiogroup" style="margin-bottom:12px">${TIERS.map(([k, l]) => `<label class="chip"><input type="radio" name="tier" value="${k}"${(tab || 'weekly') === k ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div>
   ${fieldsHtml({ total_marks: lastTotal() })}
@@ -98,11 +112,12 @@ ${chartTests.length >= 2 ? `<div class="card"><h2>Progress</h2>${lineChart({ lab
 <div class="tabs" role="tablist">${[['', 'All'], ...TIERS].map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
 ${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Test</th><th>Tier</th><th class="num">Marks</th><th class="num">%</th><th class="num" title="correct / wrong / unattempted">✓ / ✗ / –</th><th class="num">Neg.</th><th></th></tr></thead><tbody>${shown.map((t) => {
     const st = testStats(t);
-    return `<tr class="click" data-id="${t.id}"><td class="nowrap">${esc(t.date)}</td><td>${esc(t.name)}${t.provider ? `<div class="muted small">${esc(t.provider)}</div>` : ''}</td><td>${esc(tierLabel(tierOf(t)))}</td><td class="num">${t.marks_obtained != null ? `${num(t.marks_obtained, 2)}${t.total_marks ? ' / ' + num(t.total_marks) : ''}` : '—'}</td><td class="num">${pct(scoreOf(t), 0)}</td><td class="num">${t.correct != null || t.incorrect != null ? `${t.correct ?? '–'} / ${t.incorrect ?? '–'} / ${st.unattempted ?? '–'}` : '—'}</td><td class="num">${t.negative_marks != null ? '−' + num(t.negative_marks, 2) : '—'}</td><td class="right">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer" data-link aria-label="Open test link">↗</a>` : ''}</td></tr>`;
+    return `<tr class="click" data-id="${t.id}"><td class="nowrap">${esc(t.date)}</td><td>${esc(t.name)}<div class="muted small">${esc([t.provider, t.subject_id && subName(t.subject_id)].filter(Boolean).join(' · '))}</div></td><td>${esc(tierLabel(tierOf(t)))}</td><td class="num">${t.marks_obtained != null ? `${num(t.marks_obtained, 2)}${t.total_marks ? ' / ' + num(t.total_marks) : ''}` : '—'}</td><td class="num">${pct(scoreOf(t), 0)}</td><td class="num">${t.correct != null || t.incorrect != null ? `${t.correct ?? '–'} / ${t.incorrect ?? '–'} / ${st.unattempted ?? '–'}` : '—'}</td><td class="num">${t.negative_marks != null ? '−' + num(t.negative_marks, 2) : '—'}</td><td class="right">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer" data-link aria-label="Open test link">↗</a>` : ''}</td></tr>`;
   }).join('')}</tbody></table></div>` : empty('No tests here yet. Enter a score above.')}`;
 
   const form = $('#qt', root);
   bindCalc(form);
+  bindTier(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const tier = form.querySelector('[name=tier]:checked').value;
@@ -115,6 +130,7 @@ ${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Test
       await refresh();
     } catch (ex) { $('[data-err]', form).textContent = ex.message; }
   });
+  $('#fsubject', root).addEventListener('change', (e) => ((subjectF = e.target.value), renderTests(host, refresh)));
   $('#fseries', root).addEventListener('change', (e) => ((series = e.target.value), renderTests(host, refresh)));
   root.addEventListener('click', (e) => {
     const tab2 = e.target.closest('[data-tab]');
@@ -139,6 +155,7 @@ function openTest(t, refresh) {
   <div class="row"><button class="btn primary">Save</button><button type="button" class="btn" id="addC">＋ Concept from this test</button><button type="button" class="btn danger" id="delT" style="margin-left:auto">Delete</button></div></form>`, { wide: true });
   const form = $('form', m.dlg);
   bindCalc(form);
+  bindTier(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const p = payload(form, { tier: form.elements.tier.value, url: form.elements.url.value, notes: form.elements.notes.value });

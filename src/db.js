@@ -125,6 +125,10 @@ export const MIGRATIONS = [
   UPDATE tests SET tier = CASE type WHEN 'topic' THEN 'topic' WHEN 'subject' THEN 'subject' ELSE 'mock' END;
   ALTER TABLE study_log ADD COLUMN task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL;
   `,
+  // v5: weekly quizzes, topic tests and subject tests belong to a subject (full mocks do not)
+  `
+  ALTER TABLE tests ADD COLUMN subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL;
+  `,
 ];
 
 /* ---------------------------- adapters ---------------------------- */

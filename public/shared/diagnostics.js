@@ -57,6 +57,14 @@ export function subjectFocus({ subjects, topics, progress, concepts, studyLog, t
   });
 }
 
+/** Average score per subject from the subject-based tests (weekly / topic / subject). Weakest first. */
+export function subjectScores(tests, subjects) {
+  return subjects.map((s) => {
+    const mine = tests.filter((t) => t.subject_id === s.id && pctOf(t) != null && tierOf(t) !== 'mock');
+    return { subject: s, n: mine.length, avg: avg(mine.map(pctOf)) };
+  }).filter((x) => x.n).sort((a, b) => a.avg - b.avg);
+}
+
 /** The written diagnosis: [{ level: 'good'|'warn'|'bad'|'info', title, text }] plus the numbers behind it. */
 export function diagnose({ tests, concepts, subjects, topics, progress, studyLog, today, examDate, weekStartOf }) {
   const out = [];
@@ -91,6 +99,13 @@ export function diagnose({ tests, concepts, subjects, topics, progress, studyLog
     if (!t) continue;
     if (t.delta >= 5) add('good', `${label} improving`, `Latest ${t.n} average ${Math.round(t.recent * 100)}%, up ${Math.round(t.delta)} points from ${Math.round(t.before * 100)}%.`);
     else if (t.delta <= -5) add('bad', `${label} slipping`, `Latest ${t.n} average ${Math.round(t.recent * 100)}%, down ${Math.round(-t.delta)} points from ${Math.round(t.before * 100)}%.`);
+  }
+
+  const ss = subjectScores(tests, subjects);
+  if (ss.length >= 2) {
+    const worst = ss[0], best = ss[ss.length - 1];
+    if (worst.avg < 0.6) add('warn', `${worst.subject.name} is your weakest subject`, `Average ${Math.round(worst.avg * 100)}% over ${worst.n} test${worst.n > 1 ? 's' : ''}, against ${Math.round(best.avg * 100)}% in ${best.subject.name}.`);
+    else add('info', 'Subject tests', `Weakest: ${worst.subject.name} (${Math.round(worst.avg * 100)}%); strongest: ${best.subject.name} (${Math.round(best.avg * 100)}%).`);
   }
 
   const focus = subjectFocus({ subjects, topics, progress, concepts, studyLog, today, days: 14 });

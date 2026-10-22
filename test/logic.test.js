@@ -5,7 +5,7 @@ import { priorityScore } from '../public/shared/priority.js';
 import { summary, testStats, weekly, causeStats } from '../public/shared/analytics.js';
 import { buildPlan } from '../public/shared/planner.js';
 import { addDays, diffDays, weekStart } from '../public/shared/dates.js';
-import { diagnose, questionMetrics, trend, weeklyMinutes } from '../public/shared/diagnostics.js';
+import { diagnose, questionMetrics, trend, weeklyMinutes, subjectScores } from '../public/shared/diagnostics.js';
 
 const ev = (date, outcome, id) => ({ date, outcome, id });
 
@@ -288,4 +288,13 @@ test('diagnostics: trend, weekly minutes and subject findings', () => {
   const d = diagnose({ ...base, tests: [], subjects, concepts, studyLog: [{ date: '2026-10-20', minutes: 30, subject_id: 1 }] });
   assert.ok(d.insights.some((i) => /ML: concepts piling up/.test(i.title)));
   assert.ok(d.insights.some((i) => /Untouched/.test(i.title) && /DB/.test(i.text)));
+});
+
+test('diagnostics: subject scores come from subject-based tests only', () => {
+  const subjects = [{ id: 1, name: 'ML' }, { id: 2, name: 'DB' }];
+  const tests = [T(1, '2026-10-01', 'weekly', { subject_id: 1, marks_obtained: 40 }), T(2, '2026-10-02', 'topic', { subject_id: 1, marks_obtained: 60 }), T(3, '2026-10-03', 'subject', { subject_id: 2, marks_obtained: 80 }), T(4, '2026-10-04', 'mock', { subject_id: 2, marks_obtained: 10 })];
+  const s = subjectScores(tests, subjects);
+  assert.deepEqual(s.map((x) => [x.subject.name, x.n, Math.round(x.avg * 100)]), [['ML', 2, 50], ['DB', 1, 80]]); // the mock is ignored
+  const d = diagnose({ ...base, tests, subjects });
+  assert.ok(d.insights.some((i) => /ML is your weakest subject/.test(i.title)));
 });

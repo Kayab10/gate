@@ -105,6 +105,12 @@ test('create / edit / duplicate / archive / delete a mistake with validation', a
   assert.equal(tt.body.tier, 'weekly');
   assert.equal((await call('POST', '/api/tests', { name: 'x', date: D(0), tier: 'nope' })).status, 400);
   assert.equal((await call('POST', '/api/tests', { name: 'x', date: D(0), url: 'javascript:alert(1)' })).status, 400);
+  // weekly / topic / subject tests carry a subject; a full mock never does
+  const sj = await call('POST', '/api/tests', { name: 'Thermo quiz', date: D(0), tier: 'weekly', subject_id: th.id, marks_obtained: 5, total_marks: 10 });
+  assert.equal(sj.body.subject_id, th.id);
+  const mk = await call('POST', '/api/tests', { name: 'Mock', date: D(0), tier: 'mock', subject_id: th.id, marks_obtained: 5, total_marks: 10 });
+  assert.equal(mk.body.subject_id, null);
+  assert.equal((await call('POST', '/api/tests', { name: 'x', date: D(0), tier: 'weekly', subject_id: 999999 })).status, 400);
   const tk = await call('POST', '/api/tasks', { title: 'Revise SVM', date: D(0) });
   const lg = await call('POST', '/api/log', { date: D(0), minutes: 25, task_id: tk.body.id });
   assert.equal(lg.body.task_id, tk.body.id);
@@ -592,7 +598,7 @@ test('migration v3 removes leftover demo rows and keeps real ones', async () => 
   const db = await pgliteAdapter(path.join(dir, 'pg'));
   await db.query('DELETE FROM schema_migrations WHERE version >= 3');
   await db.query('ALTER TABLE mistakes DROP COLUMN title, DROP COLUMN kind, DROP COLUMN note, ALTER COLUMN cause_primary SET NOT NULL');
-  await db.query('ALTER TABLE tests DROP COLUMN tier, DROP COLUMN url');
+  await db.query('ALTER TABLE tests DROP COLUMN tier, DROP COLUMN url, DROP COLUMN subject_id');
   await db.query('ALTER TABLE study_log DROP COLUMN task_id');
   await db.close();
   ctx = await boot(dir, { noUser: true });
