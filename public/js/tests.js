@@ -9,7 +9,6 @@ export const TIERS = [['weekly', 'Weekly quiz'], ['topic', 'Topic-wise'], ['subj
 const tierOf = (t) => t.tier || (t.type === 'topic' ? 'topic' : t.type === 'subject' ? 'subject' : 'mock');
 const tierLabel = (k) => TIERS.find((x) => x[0] === k)?.[1] || k;
 const scoreOf = (t) => testStats(t).scorePct;
-const scorePill = (p) => (p == null ? '—' : `<span class="scorepill ${p >= 0.7 ? 'hi' : p < 0.4 ? 'lo' : ''}">${Math.round(p * 100)}%</span>`);
 
 let tab = '';
 
@@ -43,13 +42,13 @@ export function renderTests(host, refresh) {
   <p class="err" data-err></p><div class="row" style="margin-top:8px"><button class="btn primary">Save score</button></div>
 </form>
 
-<div class="tiles">${tierStats.map((s) => `<div class="tile${tab === s.k ? ' on' : ''}" data-tier="${s.k}"><div class="v">${pct(s.latest)}</div><div class="l">${s.l} · latest${s.n ? ` · ${s.n} test${s.n > 1 ? 's' : ''}` : ''}</div>${s.n ? `<div class="muted small">best ${pct(s.best)} · last-3 avg ${pct(s.avg3)}</div>` : ''}</div>`).join('')}</div>
+<div class="tiles">${tierStats.map((s) => `<div class="tile" data-tier="${s.k}" style="cursor:pointer"><div class="v">${pct(s.latest)}</div><div class="l">${s.l} · latest${s.n ? ` · ${s.n} test${s.n > 1 ? 's' : ''}` : ''}</div>${s.n ? `<div class="muted small">best ${pct(s.best)} · last-3 avg ${pct(s.avg3)}</div>` : ''}</div>`).join('')}</div>
 
 ${chartTests.length >= 2 ? `<div class="card"><h2>Progress</h2>${lineChart({ labels: chartTests.map((t) => t.date), bridge: true, yMax: 1, yFormat: (v) => `${Math.round(v * 100)}%`, ariaLabel: 'Score percentage by test', series: tiersWithData.map(([k, l], i) => ({ name: l, color: COLORS[TIERS.findIndex((x) => x[0] === k) % COLORS.length], values: chartTests.map((t) => (tierOf(t) === k ? scoreOf(t) : null)) })) })}
-</div>` : ''}
+  <div class="row" style="margin-top:6px">${tiersWithData.map(([k, l]) => `<span class="badge"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLORS[TIERS.findIndex((x) => x[0] === k) % COLORS.length]}"></i> ${l}</span>`).join('')}</div></div>` : ''}
 
 <div class="tabs" role="tablist">${[['', 'All'], ...TIERS].map(([k, l]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
-${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Test</th><th>Tier</th><th class="num">Marks</th><th class="num">%</th><th></th></tr></thead><tbody>${shown.map((t) => `<tr class="click" data-id="${t.id}"><td class="nowrap">${esc(t.date)}</td><td>${esc(t.name)}${t.provider ? `<div class="muted small">${esc(t.provider)}</div>` : ''}</td><td>${esc(tierLabel(tierOf(t)))}</td><td class="num">${t.marks_obtained != null ? `${num(t.marks_obtained, 2)}${t.total_marks ? ' / ' + num(t.total_marks) : ''}` : '—'}</td><td class="num">${scorePill(scoreOf(t))}</td><td class="right">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer" data-link aria-label="Open test link">↗</a>` : ''}</td></tr>`).join('')}</tbody></table></div>` : empty('No tests here yet. Enter a score above.')}`;
+${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Test</th><th>Tier</th><th class="num">Marks</th><th class="num">%</th><th></th></tr></thead><tbody>${shown.map((t) => `<tr class="click" data-id="${t.id}"><td class="nowrap">${esc(t.date)}</td><td>${esc(t.name)}${t.provider ? `<div class="muted small">${esc(t.provider)}</div>` : ''}</td><td>${esc(tierLabel(tierOf(t)))}</td><td class="num">${t.marks_obtained != null ? `${num(t.marks_obtained, 2)}${t.total_marks ? ' / ' + num(t.total_marks) : ''}` : '—'}</td><td class="num">${pct(scoreOf(t), 0)}</td><td class="right">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer" data-link aria-label="Open test link">↗</a>` : ''}</td></tr>`).join('')}</tbody></table></div>` : empty('No tests here yet. Enter a score above.')}`;
 
   const form = $('#qt', root);
   form.addEventListener('submit', async (e) => {

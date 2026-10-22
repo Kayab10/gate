@@ -95,7 +95,7 @@ export function renderConcepts(host, refresh) {
   const reviewCard = () => {
     const prev = previewOutcomes(cur, D.today, D.settings.srs);
     const btn = (o, label, cls) => `<button class="btn ${cls}" data-outcome="${o}">${label}<small>→ ${esc(prev[o].next_review)} (${diffDays(prev[o].next_review, D.today)}d)${prev[o].status === 'mastered' ? ' · mastered' : ''}</small></button>`;
-    return `<section class="card qcard" data-kind="${esc(cur.kind)}"><div class="row between"><span>${kindBadge(cur.kind)} ${dueLabel(cur)}</span><span class="muted small">${due.length} left today</span></div>
+    return `<section class="card qcard"><div class="row between"><span>${kindBadge(cur.kind)} ${dueLabel(cur)}</span><span class="muted small">${due.length} left today</span></div>
       <h2 style="margin:12px 0 2px">${esc(cur.title)}</h2>
       <div class="muted small">${esc(subName(cur.subject_id))}${cur.topic_id ? ' › ' + esc(topName(cur.topic_id)) : ''}</div>
       <p class="muted small">Try to explain it from memory, then reveal your note.</p>
@@ -117,7 +117,7 @@ ${cur ? reviewCard() : due.length ? `<section class="card row between"><div><b>$
     const list = filtered();
     $('#clist', root).innerHTML = !D.live.length ? empty('Nothing here yet. Add a concept you found hard, or one you must remember.')
       : !list.length ? empty('No concepts match.')
-        : list.slice(0, 200).map((m) => `<div class="card concept" data-kind="${esc(m.kind)}" data-id="${m.id}" style="cursor:pointer;margin-bottom:8px"><div class="row between"><b>${esc(m.title)}</b>${dueLabel(m)}</div>
+        : list.slice(0, 200).map((m) => `<div class="card concept" data-id="${m.id}" style="cursor:pointer;margin-bottom:8px"><div class="row between"><b>${esc(m.title)}</b>${dueLabel(m)}</div>
           <div class="muted small">${esc(subName(m.subject_id))}${m.topic_id ? ' › ' + esc(topName(m.topic_id)) : ''}${m.test_name ? ' · ' + esc(m.test_name) : ''}</div>
           <div style="margin-top:6px">${kindBadge(m.kind)} ${statusBadge(m)}</div>${m.note ? `<div class="muted small clipline" style="margin-top:6px">${esc(m.note)}</div>` : ''}</div>`).join('');
   };
