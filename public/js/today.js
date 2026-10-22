@@ -26,6 +26,20 @@ export function renderToday(host, refresh) {
   const bySub = D.subjects.map((sb) => { const ts = tops.filter((t) => t.subject_id === sb.id); return { sb, n: ts.length, done: ts.filter((t) => studiedSet.has(t.id)).length }; }).filter((x) => x.n);
   const sylPct = tops.length ? tops.filter((t) => studiedSet.has(t.id)).length / tops.length : 0;
   const C = 2 * Math.PI * 54;
+  const byDay = new Map();
+  for (const l of D.studyLog) byDay.set(l.date, (byDay.get(l.date) || 0) + l.minutes);
+  const ref = target || 240;
+  const heatStart = addDays(ws, -7 * 25);
+  const cells = [];
+  for (let d = heatStart; d <= addDays(ws, 6); d = addDays(d, 1)) {
+    const m = byDay.get(d) || 0;
+    const lv = d > D.today ? 'fut' : !m ? '' : m < ref * 0.34 ? 'l1' : m < ref * 0.67 ? 'l2' : m < ref ? 'l3' : 'l4';
+    cells.push(`<i class="${lv}" title="${d}: ${m ? dur(m) : 'nothing logged'}"></i>`);
+  }
+  const weekMin = [...Array(7)].reduce((a, _, i) => a + (byDay.get(addDays(ws, i)) || 0), 0);
+  const last30 = [...Array(30)].reduce((a, _, i) => a + (byDay.get(addDays(D.today, -i)) || 0), 0);
+  let streak = 0;
+  for (let d = byDay.has(D.today) ? D.today : addDays(D.today, -1); byDay.has(d); d = addDays(d, -1)) streak++;
 
   root.innerHTML = `
 <div class="page-head"><div><h1>Today</h1><p>${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>${exam ? `<div class="countdown" title="Exam date: ${esc(exam)}"><b>${Math.max(0, diffDays(exam, D.today))}</b><span>days left</span></div>` : ''}</div>
@@ -39,6 +53,10 @@ export function renderToday(host, refresh) {
   <a class="btn primary" href="#/timer">${running ? `⏱ Timer running · ${esc(running.text)}` : '▶ Start timer'}</a>
   ${due.length ? '<button class="btn" id="rev">Review concepts</button>' : ''}
 </div>
+<section class="card"><div class="row between"><h2 style="margin:0">Consistency</h2><span class="muted small">last 26 weeks</span></div>
+  <div class="heatcard" style="margin-top:14px"><div class="heatwrap"><div class="heatdays" aria-hidden="true"><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span>Sun</span></div><div class="heat" aria-label="Study consistency heat map">${cells.join('')}</div></div>
+    <div class="heatstats"><div><b>${dur(weekMin) || '0m'}</b><span>this week</span></div><div><b>${dur(Math.round(last30 / 30)) || '0m'}</b><span>daily avg (30d)</span></div><div><b>${streak}d</b><span>streak</span></div></div>
+    <span class="legend2">Less <i></i><i style="background:var(--accent);opacity:.28"></i><i style="background:var(--accent);opacity:.5"></i><i style="background:var(--accent);opacity:.75"></i><i style="background:var(--accent)"></i> More</span></div></section>
 <div class="grid g2">
 <section class="card"><div class="row between"><h2 style="margin:0">To-do today</h2><a href="#/todo" class="small">Open ›</a></div>
   ${tasks.length ? tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-task="${t.id}"${t.done ? ' checked' : ''} aria-label="Done"><span class="tt">${esc(t.title)}${t.subject_id ? `<div class="muted small">${esc(subName(t.subject_id))}</div>` : ''}</span>${t.done ? '' : `<button data-play="${t.id}" aria-label="Start timer">▶</button>`}</div>`).join('') : '<p class="muted small" style="margin:8px 0 0">Nothing planned. Add to-dos in the To-do tab.</p>'}</section>

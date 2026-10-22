@@ -1,16 +1,17 @@
 /* ---------- tokens: calm — soft off-white canvas, white cards, one indigo accent ---------- */
+/* light: warm, low-contrast and quiet — nothing pure white or pure black */
 :root, :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f5f9; --panel: #ffffff; --panel2: #f4f5fa; --raise: #eceef6; --line: #e8eaf2; --line2: #d6d9e8;
-  --text: #1f2437; --muted: #667089; --faint: #9aa1b8;
-  --accent: #4558d4; --accent-ink: #fff; --accent-soft: #e9ecfd;
-  --good: #1f8a5f; --good-soft: #dff3ea; --warn: #b8660d; --warn-soft: #faeed8; --bad: #c4414f; --bad-soft: #fae3e6;
-  --c1: #4558d4; --c2: #d08a1e; --c3: #1d94a8; --c4: #8a63e0; --c5: #d3478a; --c6: #6a9a2a; --c7: #55627a; --c8: #1a9a8c;
-  --h0: #eceef6; --h3: #b6dcc3; --h4: #6cb88a;
+  --bg: #f3f3ef; --panel: #fbfbf8; --panel2: #f1f1ec; --raise: #e8e9e3; --line: #e7e8e2; --line2: #d8dad2;
+  --text: #2c3142; --muted: #70768a; --faint: #a2a7b6;
+  --accent: #5a6acb; --accent-ink: #fbfbf8; --accent-soft: #e8eaf7;
+  --good: #3f8a68; --good-soft: #e0efe7; --warn: #b17a35; --warn-soft: #f4ead8; --bad: #bb5560; --bad-soft: #f5e4e5;
+  --c1: #5a6acb; --c2: #c8913d; --c3: #3f98a6; --c4: #8d6bd6; --c5: #cc5a92; --c6: #78a03a; --c7: #626d84; --c8: #3b9d90;
+  --h0: #e9eae4; --h3: #b6dcc3; --h4: #6cb88a;
   --r: 18px; --r2: 11px; --ease: cubic-bezier(.2, .7, .2, 1); --t: 150ms;
-  --shadow: 0 1px 2px rgba(31,36,55,.04), 0 10px 28px -14px rgba(31,36,55,.14);
-  --shadow-hover: 0 2px 4px rgba(31,36,55,.05), 0 16px 32px -14px rgba(31,36,55,.2);
-  --pastel-s: 78%; --pastel-l: 94%; --pastel-bar: 58%;
+  --shadow: 0 1px 2px rgba(44,49,66,.03), 0 8px 24px -16px rgba(44,49,66,.12);
+  --shadow-hover: 0 2px 4px rgba(44,49,66,.04), 0 14px 28px -16px rgba(44,49,66,.16);
+  --pastel-s: 55%; --pastel-l: 92%; --pastel-bar: 62%;
   font-family: Inter, "Segoe UI Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 15px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; font-feature-settings: "tnum" 1, "cv11" 1;
 }
@@ -245,21 +246,21 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(6px); anim
 /* ---------- calm polish (after the base rules so it wins) ---------- */
 .card, .tile, .day, .tablewrap { box-shadow: var(--shadow); }
 .tile:hover { box-shadow: var(--shadow-hover); transform: none; }
-.btn { background: var(--panel); box-shadow: 0 1px 2px rgba(31,36,55,.05); }
+.btn { background: var(--panel); box-shadow: 0 1px 2px rgba(44,49,66,.04); }
 .btn:hover { background: var(--panel2); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 16px -8px var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 12px -8px var(--accent); }
 .btn.primary:hover { filter: brightness(1.07); background: var(--accent); }
 .btn.ghost { background: transparent; box-shadow: none; } .btn.ghost:hover { background: var(--panel2); }
 .btn.danger { background: var(--bad-soft); box-shadow: none; }
 input, select, textarea { background: var(--panel); }
 input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px var(--accent-soft); }
 .tabs { background: var(--panel2); border-color: transparent; }
-.tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(31,36,55,.12); }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(44,49,66,.08); }
 .empty { background: transparent; }
 th { background: var(--panel2); }
 .qtext { background: var(--panel2); }
 dialog { box-shadow: 0 30px 80px rgba(31,36,55,.3); }
-dialog::backdrop { background: rgba(31,36,55,.38); backdrop-filter: blur(3px); }
+dialog::backdrop { background: rgba(44,49,66,.3); backdrop-filter: blur(3px); }
 .sticky-bulk, .toast { background: var(--panel); box-shadow: 0 12px 32px rgba(31,36,55,.2); }
 .logo { background: var(--accent); }
 .side { background: transparent; border-right: 0; }
@@ -313,3 +314,17 @@ dialog::backdrop { background: rgba(31,36,55,.38); backdrop-filter: blur(3px); }
 .col input.quick { width: 100%; }
 .cardlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; } .cardlist .tcard { margin: 0; }
 @media (max-width: 860px) { .board { grid-auto-columns: 82%; } .syl { grid-template-columns: 1fr; justify-items: center; } .subrow { grid-template-columns: 1fr 1.2fr 44px; } }
+
+/* compact consistency heat map (Today): small fixed cells, packed tight */
+.heatcard { display: grid; grid-template-columns: auto 1fr; gap: 12px 36px; align-items: center; --cs: 14px; }
+.heatwrap { display: grid; grid-template-columns: auto auto; gap: 8px; justify-content: start; overflow-x: auto; padding-bottom: 2px; }
+.heat { display: grid; grid-auto-flow: column; grid-auto-columns: var(--cs); grid-template-rows: repeat(7, var(--cs)); gap: 3px; }
+.heat i { display: block; border-radius: 3px; background: var(--h0); transition: transform var(--t); }
+.heat i:hover { transform: scale(1.4); }
+.heat i.l1 { background: var(--accent); opacity: .28; } .heat i.l2 { background: var(--accent); opacity: .5; } .heat i.l3 { background: var(--accent); opacity: .75; } .heat i.l4 { background: var(--accent); }
+.heat i.fut { background: transparent; outline: 1px dashed var(--line); outline-offset: -1px; }
+.heatdays { display: grid; grid-template-rows: repeat(7, var(--cs)); gap: 3px; font-size: .62rem; line-height: var(--cs); color: var(--faint); }
+.heatstats { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 28px; justify-content: start; }
+.heatstats b { display: block; font-size: 1.5rem; letter-spacing: -.03em; line-height: 1.1; } .heatstats span { font-size: .76rem; color: var(--muted); }
+.legend2 { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 3px; font-size: .72rem; color: var(--muted); } .legend2 i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; background: var(--h0); }
+@media (max-width: 860px) { .heatcard { grid-template-columns: 1fr; --cs: 10px; } .heat, .heatdays { gap: 2px; } .heatstats { grid-template-columns: repeat(3, 1fr); } }
