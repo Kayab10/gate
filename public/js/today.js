@@ -3,6 +3,7 @@ import { mount, D, esc, $, api, subName, fail, empty, dur, num } from './util.js
 import { dueConcepts, startReview, KINDS } from './concepts.js';
 import { startTask, runningInfo } from './timer.js';
 import { insightCards } from './insights.js';
+import { goalsCard, bindGoals } from './goals.js';
 import { testStats } from '/shared/analytics.js';
 import { diffDays, weekStart, addDays } from '/shared/dates.js';
 
@@ -62,6 +63,8 @@ export function renderToday(host, refresh) {
 <section class="card s4"><div class="row between"><h2 style="margin:0">Due for review</h2><a href="#/concepts" class="small">Concepts ›</a></div>
   ${due.length ? `<p class="muted small" style="margin:8px 0 0">${due.length} concept${due.length > 1 ? 's' : ''} due</p><div class="scrollbox" style="max-height:228px">` + due.map((m) => `<div class="plan-item"><div><b>${esc(m.title)}</b><div class="muted small">${esc(subName(m.subject_id))}</div></div><span class="badge">${KINDS[m.kind]?.[0] || ''}</span></div>`).join('') + `</div><div class="row" style="margin-top:10px"><button class="btn small" id="rev">Start review</button></div>` : `<div style="margin-top:10px">${empty(D.live.length ? 'All caught up.' : 'Add a concept you found hard.')}</div>`}</section>
 
+${goalsCard(ws, { compact: true, cls: 's12' })}
+
 <section class="card s12"><div class="row between"><h2 style="margin:0">Consistency</h2><span class="muted small">last 26 weeks</span></div>
   <div class="heatcard" style="margin-top:14px"><div class="heatwrap"><div class="heatdays" aria-hidden="true"><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span>Sun</span></div><div class="heat" aria-label="Study consistency heat map">${cells.join('')}</div></div>
     <div class="heatstats"><div><b>${dur(weekMin) || '0m'}</b><span>this week</span></div><div><b>${dur(Math.round(last30 / 30)) || '0m'}</b><span>daily avg (30d)</span></div><div><b>${week.length ? `${week.filter((t) => t.done).length}/${week.length}` : '—'}</b><span>week's to-dos</span></div></div>
@@ -72,6 +75,7 @@ export function renderToday(host, refresh) {
 <div class="s6">${cards.subjCard}</div><div class="s6">${cards.stackCard}</div>
 </div>`;
 
+  bindGoals(root, refresh);
   $('#rev', root)?.addEventListener('click', () => (startReview(), (location.hash = '#/concepts')));
   root.addEventListener('click', (e) => {
     const pl = e.target.closest('[data-play]');

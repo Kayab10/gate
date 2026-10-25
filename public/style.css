@@ -456,3 +456,30 @@ dialog::backdrop { background: rgba(44,49,66,.3); backdrop-filter: blur(3px); }
 /* never let a long <select> option or date input widen a mobile layout */
 .quickadd > * { min-width: 0; } .quickadd select, .quickadd input { width: 100%; }
 .todomain, .todoside, .timerside { min-width: 0; }
+
+/* weekly goals */
+.goals .glist { display: grid; gap: 2px; }
+.goal { display: flex; align-items: center; gap: 10px; padding: 9px 4px 9px 10px; border-top: 1px solid var(--line); position: relative; }
+.goal:first-child { border-top: 0; }
+.goal::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: hsl(var(--h, 250) 55% var(--pastel-bar)); }
+.goal .gt { flex: 1; min-width: 0; cursor: pointer; font-size: .92rem; font-weight: 550; overflow-wrap: anywhere; } .goal .gt:hover { color: var(--accent); }
+.goal.done .gt { text-decoration: line-through; color: var(--muted); font-weight: 500; }
+.goal .tag { padding: 1px 9px; border-radius: 99px; background: hsl(var(--h, 250) 60% 55% / .15); color: hsl(var(--h, 250) 50% var(--tag-l)); font-size: .74rem; font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal .gx { border: 0; background: none; color: var(--faint); cursor: pointer; padding: 2px 6px; border-radius: 6px; opacity: 0; transition: opacity var(--t); } .goal:hover .gx, .goal:focus-within .gx { opacity: 1; } .goal .gx:hover { color: var(--bad); }
+@media (hover: none) { .goal .gx { opacity: .6; } }
+.goal input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line2); background: var(--panel); cursor: pointer; flex: none; margin: 0; display: inline-grid; place-content: center; transition: all var(--t); }
+.goal input[type=checkbox]:hover { border-color: var(--accent); } .goal input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+.goal input[type=checkbox]:checked::after { content: ""; width: 4px; height: 9px; border: solid var(--accent-ink); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.goaladd { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; } .goaladd input { flex: 1; min-width: 180px; background: var(--panel2); border-color: transparent; } .goaladd select { max-width: 190px; min-width: 0; }
+.goals.compact .glist { display: flex; flex-wrap: wrap; gap: 8px; }
+.goals.compact .goal { border: 1px solid var(--line); border-radius: 12px; padding: 7px 8px 7px 14px; background: var(--panel2); } .goals.compact .goal::before { top: 7px; bottom: 7px; left: 5px; }
+.goals.compact .goal .gt { flex: none; font-size: .88rem; }
+.wkgoals { margin-bottom: 12px; }
+
+/* phone: filters and goal chips must never be wider than the screen */
+.page-head .row { min-width: 0; } .page-head select { min-width: 0; }
+.goals.compact .goal { max-width: 100%; } .goals.compact .goal .gt { flex: 0 1 auto; min-width: 0; }
+@media (max-width: 860px) {
+  .page-head > .row, .page-head > label { width: 100%; }
+  .page-head .row > label { flex: 1 1 140px; min-width: 0; } .page-head .row > label select { width: 100%; min-width: 0; }
+}

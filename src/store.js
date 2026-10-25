@@ -9,8 +9,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { DEFAULT_SRS, normalizeSrs, replay, REVIEW_OUTCOMES, OUTCOMES } from '../public/shared/srs.js';
 import { DEFAULT_PRIORITY, normalizePriority } from '../public/shared/priority.js';
 import { DEFAULT_PLANNER, normalizePlanner } from '../public/shared/planner.js';
-import { todayStr, isDate, addDays } from '../public/shared/dates.js';
-import { validate, ValidationError, MISTAKE_SPEC, TEST_SPEC, TASK_SPEC, LOG_SPEC, cleanBreakdown } from './validate.js';
+import { todayStr, isDate, addDays, weekStart } from '../public/shared/dates.js';
+import { validate, ValidationError, MISTAKE_SPEC, TEST_SPEC, TASK_SPEC, GOAL_SPEC, LOG_SPEC, cleanBreakdown } from './validate.js';
 import { BRANCHES, seedBranch, seedCauses } from './db.js';
 
 const scrypt = promisify(crypto.scrypt);
@@ -400,8 +400,6 @@ export function createStore(db) {
       const v = validate(TEST_SPEC, input, { partial: !!id });
       if (v.tier) v.type = v.tier === 'weekly' ? 'practice' : v.tier; // keep the older "type" in step with the tier
       if (v.url && !/^https?:\/\//i.test(v.url)) throw bad('url', 'must start with http:// or https://');
-      if (v.tier === 'mock') v.subject_id = null; // a full mock covers everything
-      if (v.subject_id != null && !(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
       if (!id) {
         v.stream_id = await needStream(streamId);
         v.user_id = uid;
@@ -414,8 +412,12 @@ export function createStore(db) {
         }
         v.breakdown = JSON.stringify(v.breakdown);
       }
-      const old = id ? await one('SELECT total_questions, correct, incorrect, total_marks, marks_obtained FROM tests WHERE id=? AND user_id=?', id, uid) : null;
+      const old = id ? await one('SELECT total_questions, correct, incorrect, total_marks, marks_obtained, tier, type FROM tests WHERE id=? AND user_id=?', id, uid) : null;
       if (id && !old) throw notFound('Test');
+      // a full mock covers every subject, so it never carries one (judged by the tier it will have after this save)
+      const tier = v.tier ?? old?.tier ?? (old ? (old.type === 'topic' || old.type === 'subject' ? old.type : 'mock') : undefined);
+      if (tier === 'mock') v.subject_id = null;
+      if (v.subject_id != null && !(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
       const m = { ...(old || {}), ...v }; // check the record as it will be after this save, not just the fields sent
       if (m.total_questions != null && (m.correct ?? 0) + (m.incorrect ?? 0) > m.total_questions) throw bad('correct', 'correct + incorrect exceeds total questions');
       if (m.marks_obtained != null && m.total_marks != null && m.marks_obtained > m.total_marks) throw bad('marks_obtained', 'exceeds total marks');
@@ -465,6 +467,30 @@ export function createStore(db) {
     }
     async function deleteTask(id) {
       if (!(await run('DELETE FROM tasks WHERE id=? AND user_id=?', id, uid)).changes) throw notFound('Task');
+      return { ok: true };
+    }
+    async function saveGoal(id, input, streamId) {
+      const v = validate(GOAL_SPEC, input, { partial: !!id });
+      if (v.week_start) v.week_start = weekStart(v.week_start); // any day of the week means that week's Monday
+      if (v.subject_id != null && !(await exists('SELECT 1 x FROM subjects WHERE id=? AND user_id=?', v.subject_id, uid))) throw bad('subject_id', 'unknown subject');
+      const ts = now();
+      if (id) {
+        if (!(await exists('SELECT 1 x FROM goals WHERE id=? AND user_id=?', id, uid))) throw notFound('Goal');
+        if ('done' in v) v.done_at = v.done ? ts : null;
+        const cols = Object.keys(v);
+        if (cols.length) await run(`UPDATE goals SET ${cols.map((k) => `${k}=?`).join(',')} WHERE id=? AND user_id=?`, ...cols.map((k) => v[k]), id, uid);
+      } else {
+        v.stream_id = await needStream(streamId);
+        v.user_id = uid;
+        v.week_start ||= weekStart(todayStr());
+        if (v.done) v.done_at = ts;
+        const cols = Object.keys(v);
+        id = await ins(`INSERT INTO goals (${cols.join(',')}, created_at) VALUES (${cols.map(() => '?').join(',')}, ?)`, ...cols.map((k) => v[k]), ts);
+      }
+      return strip(await one('SELECT * FROM goals WHERE id=? AND user_id=?', id, uid));
+    }
+    async function deleteGoal(id) {
+      if (!(await run('DELETE FROM goals WHERE id=? AND user_id=?', id, uid)).changes) throw notFound('Goal');
       return { ok: true };
     }
     async function addLog(input, streamId) {
@@ -597,6 +623,7 @@ export function createStore(db) {
       ${agg('SELECT * FROM tests WHERE user_id = $1 AND stream_id = $2', 't.date, t.id')} AS tests,
       ${agg('SELECT * FROM tasks WHERE user_id = $1 AND stream_id = $2', 't.date, t.id')} AS tasks,
       ${agg('SELECT * FROM study_log WHERE user_id = $1 AND stream_id = $2', 't.date, t.id')} AS study_log,
+      ${agg('SELECT * FROM goals WHERE user_id = $1 AND stream_id = $2', 't.week_start, t.id')} AS goals,
       ${agg(`SELECT p.* FROM topic_progress p JOIN topics tp ON tp.id = p.topic_id WHERE p.user_id = $1 AND tp.subject_id IN (${IN_SUBJECTS})`)} AS progress`;
     async function bootstrap(streamId) {
       const r = (await exec(BOOTSTRAP_SQL, [uid, Number(streamId) || 0])).rows[0];
@@ -609,7 +636,7 @@ export function createStore(db) {
       return {
         ...base, stream,
         subjects: r.subjects.map(strip), topics: r.topics.map(strip), mistakes: r.mistakes.map(parseMistake), reviews: r.reviews.map(strip),
-        tests: r.tests.map(parseTest), tasks: r.tasks.map(strip), studyLog: r.study_log.map(strip), progress: r.progress.map(strip),
+        tests: r.tests.map(parseTest), tasks: r.tasks.map(strip), goals: r.goals.map(strip), studyLog: r.study_log.map(strip), progress: r.progress.map(strip),
       };
     }
 
@@ -617,7 +644,7 @@ export function createStore(db) {
       bootstrap, listStreams, availableBranches, addBranch, getSettings, putSetting, recomputeAll,
       createMistake, updateMistake, getMistake, deleteMistake, duplicateMistake, bulk,
       addReview, updateReview, deleteReview,
-      saveTest, deleteTest, saveTask, deleteTask, addLog, deleteLog, putProgress,
+      saveTest, deleteTest, saveTask, deleteTask, saveGoal, deleteGoal, addLog, deleteLog, putProgress,
       saveSubject, deleteSubject, saveTopic, deleteTopic, saveCause, deleteCause,
       saveAttachment, getAttachment,
     };

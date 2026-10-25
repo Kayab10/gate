@@ -111,6 +111,11 @@ test('create / edit / duplicate / archive / delete a mistake with validation', a
   const mk = await call('POST', '/api/tests', { name: 'Mock', date: D(0), tier: 'mock', subject_id: th.id, marks_obtained: 5, total_marks: 10 });
   assert.equal(mk.body.subject_id, null);
   assert.equal((await call('POST', '/api/tests', { name: 'x', date: D(0), tier: 'weekly', subject_id: 999999 })).status, 400);
+  // a mock stays subject-free even when edited later without sending a tier
+  const mk2 = await call('PUT', `/api/tests/${sj.body.id}`, { tier: 'mock' });
+  assert.equal(mk2.body.subject_id, null);
+  const mk3 = await call('PUT', `/api/tests/${mk.body.id}`, { subject_id: th.id });
+  assert.equal(mk3.body.subject_id, null);
   const tk = await call('POST', '/api/tasks', { title: 'Revise SVM', date: D(0) });
   const lg = await call('POST', '/api/log', { date: D(0), minutes: 25, task_id: tk.body.id });
   assert.equal(lg.body.task_id, tk.body.id);
@@ -598,6 +603,7 @@ test('migration v3 removes leftover demo rows and keeps real ones', async () => 
   const db = await pgliteAdapter(path.join(dir, 'pg'));
   await db.query('DELETE FROM schema_migrations WHERE version >= 3');
   await db.query('ALTER TABLE mistakes DROP COLUMN title, DROP COLUMN kind, DROP COLUMN note, ALTER COLUMN cause_primary SET NOT NULL');
+  await db.query('DROP TABLE goals');
   await db.query('ALTER TABLE tests DROP COLUMN tier, DROP COLUMN url, DROP COLUMN subject_id');
   await db.query('ALTER TABLE study_log DROP COLUMN task_id');
   await db.close();
@@ -614,4 +620,32 @@ test('migration v3 removes leftover demo rows and keeps real ones', async () => 
   assert.deepEqual(s.tasks.map((t) => t.title), ['Real task']);
   assert.deepEqual(s.studyLog.map((l) => l.note), ['mine']);
   await ctx.app.close();
+});
+
+test('weekly goals: any day maps to that week, done tracking, validation and per-user separation', async () => {
+  const { app, a, makeClient } = await boot(tmp());
+  const sub = (await boots(a)).subjects[0].id;
+  const mon = (d) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  let r = await a.call('POST', '/api/goals', { title: 'Finish ML notes', subject_id: sub, week_start: D(2) });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.week_start, mon(D(2)));
+  assert.equal(r.body.done, 0);
+  assert.equal((await a.call('POST', '/api/goals', { title: 'Default week' })).body.week_start, mon(D(0)));
+  assert.equal((await a.call('POST', '/api/goals', { title: '' })).status, 400);
+  assert.equal((await a.call('POST', '/api/goals', { title: 'x', subject_id: 999999 })).status, 400);
+  const id = r.body.id;
+  r = await a.call('PUT', `/api/goals/${id}`, { done: true });
+  assert.equal(r.body.done, 1);
+  assert.ok(r.body.done_at);
+  assert.equal((await a.call('PUT', `/api/goals/${id}`, { done: false })).body.done_at, null);
+  assert.equal((await boots(a)).goals.length, 2);
+  // another account cannot see, change or delete it
+  const b = makeClient();
+  assert.equal((await b.signup('b@example.com', 'ME')).status, 200);
+  assert.equal((await boots(b)).goals.length, 0);
+  assert.equal((await b.call('PUT', `/api/goals/${id}`, { done: true })).status, 404);
+  assert.equal((await b.call('DELETE', `/api/goals/${id}`)).status, 404);
+  assert.equal((await a.call('DELETE', `/api/goals/${id}`)).status, 200);
+  assert.equal((await boots(a)).goals.length, 1);
+  await app.close();
 });

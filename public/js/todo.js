@@ -2,6 +2,7 @@
 // the ▶ button on a task starts the timer for it.
 import { mount, D, esc, $, api, subjectOpts, subName, fail, dur, pct, topicsOf, openModal } from './util.js';
 import { startTask } from './timer.js';
+import { goalsCard, bindGoals } from './goals.js';
 import { addDays, weekStart, dayName, shortDate } from '/shared/dates.js';
 
 let tab = 'today';
@@ -148,6 +149,7 @@ function today(host, refresh) {
     <div class="scrollbox" style="max-height:56vh">${open.map((t) => row(t)).join('')}${done.length ? `<div class="grouplabel">Completed</div>${done.map((t) => row(t)).join('')}` : ''}${list.length ? '' : '<p class="muted small" style="margin:12px 0 0">Nothing planned for today yet — add your first to-do above.</p>'}</div></section>
 </div>
 <div class="todoside">
+  ${goalsCard(weekStart(D.today))}
   <section class="card"><div class="row between"><h2 style="margin:0">Backlog</h2>${missed.length ? '<button class="btn small" id="allToday">Move all to today</button>' : ''}</div>
     <div class="scrollbox" style="max-height:240px;margin-top:6px">${missed.length ? [...missed].reverse().map((t) => row(t, { date: true })).join('') : '<p class="muted small" style="margin:8px 0 0">Nothing overdue. 🎉</p>'}</div></section>
   <section class="card"><h2 style="margin-bottom:2px">Coming up</h2>
@@ -159,6 +161,7 @@ function today(host, refresh) {
     try { await api('POST', '/api/tasks', { title: f.title.value, date: f.date.value || D.today, kind: 'study', subject_id: f.subject_id.value }); await refresh(); } catch (ex) { fail(ex); }
   });
   bindCards(body, refresh);
+  bindGoals(body, refresh);
   $('#allToday', body)?.addEventListener('click', async () => {
     try { for (const t of missed) await api('PUT', `/api/tasks/${t.id}`, { date: D.today }); await refresh(); } catch (ex) { fail(ex); }
   });
@@ -180,6 +183,7 @@ function week(host, refresh) {
     <b>${shortDate(days[0])} – ${shortDate(days[6])}</b></div>
   <div class="wkprog"><div class="prog"><div style="width:${all.length ? (doneN / all.length) * 100 : 0}%"></div></div><span class="muted small">${doneN}/${all.length} done · ${dur(weekMin) || '0m'} studied</span></div>
 </section>
+${goalsCard(wk)}
 ${missed.length && isNow ? `<section class="backlogbar"><div class="row between"><span><b>Backlog</b> <span class="muted small">· ${missed.length} overdue — drag onto a day or</span></span><button class="btn small" id="allToday">move all to today</button></div>
   <div class="bchips">${missed.slice(-12).map((t) => `<span class="bchip" style="--h:${hue(t)}" draggable="true" data-card="${t.id}"><span data-edit="${t.id}">${esc(t.title)}</span><small>${esc(shortDate(t.date))}</small><button data-today="${t.id}" title="Move to today" aria-label="Move to today">→</button></span>`).join('')}</div></section>` : ''}
 <div class="board7">${days.map((d) => {
@@ -193,6 +197,7 @@ ${missed.length && isNow ? `<section class="backlogbar"><div class="row between"
   }).join('')}</div>
 <p class="hint" style="margin:10px 2px 0">Drag a card to another day to move it · tap a title to edit.</p>`;
   bindCards(body, refresh);
+  bindGoals(body, refresh);
   $('#prevW', body).addEventListener('click', () => ((wk = addDays(wk, -7)), week(host, refresh)));
   $('#nextW', body).addEventListener('click', () => ((wk = addDays(wk, 7)), week(host, refresh)));
   $('#thisW', body).addEventListener('click', () => ((wk = weekStart(D.today)), week(host, refresh)));

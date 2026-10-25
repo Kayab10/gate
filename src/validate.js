@@ -139,6 +139,13 @@ export const TASK_SPEC = {
   notes: { t: 'str' },
 };
 
+export const GOAL_SPEC = {
+  week_start: { t: 'date' },
+  title: { t: 'str', req: true, len: 300 },
+  subject_id: { t: 'int' },
+  done: { t: 'bool' },
+};
+
 export const LOG_SPEC = {
   date: { t: 'date', req: true },
   subject_id: { t: 'int' },
